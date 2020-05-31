@@ -32,10 +32,10 @@ class Maze
 {
   constructor()
   {
-    this.width = 20;
-    this.height = 20;
+    this.width = 30;
+    this.height = 30;
 
-    this.deadSize = 8;
+    this.deadSize = 0;
     this.grid = [];
     this.initialize();
   }
@@ -66,63 +66,83 @@ class MazeRenderer
       this.ctx = null;
       this.blockWidth = 30;
       this.blockHeight = 30;
+      this.wallTexture = document.getElementById("wallTex");
+      this.updateFrame = true;
     }
 
     displayMaze(maze)
     {
-      this.ctx.clearRect(0, 0, 800, 800);
-      for (let x = 0; x < maze.width; x++)
+      if (this.updateFrame)
       {
-        for (let y = 0; y < maze.height; y++)
-        {
-          this.displayBlockSolid(x, y, maze.grid[x][y]);
-        }
-      }
+        this.wallTexture = document.getElementById("wallTex");
+        this.ctx.clearRect(0, 0, 800, 800);
 
-      for (let x = 0; x < maze.width; x++)
-      {
-        for (let y = 0; y < maze.height; y++)
+        this.displayBackground();
+        
+        for (let x = 0; x < maze.width; x++)
         {
-          if (!maze.grid[x][y].dead) {
-            this.displayBlockWalls(x, y, maze.grid[x][y]);
+          for (let y = 0; y < maze.height; y++)
+          {
+            this.displayBlockSolid(x, y, maze.grid[x][y]);
           }
         }
+
+        for (let x = 0; x < maze.width; x++)
+        {
+          for (let y = 0; y < maze.height; y++)
+          {
+            if (!maze.grid[x][y].dead) {
+              this.displayBlockWalls(x, y, maze.grid[x][y]);
+            }
+          }
+        }
+        this.updateFrame = false;
+
       }
-
-
+      window.requestAnimationFrame(function () { renderer.displayMaze(globalMaze); }.bind(renderer));
     }
 
-     drawWall(x1, y1, x2, y2)
+    displayBackground()
     {
-      this.ctx.strokeStyle = "#000000";
-      this.ctx.beginPath();
-      this.ctx.moveTo(x1, y1);
-      this.ctx.lineTo(x2, y2);
-      this.ctx.closePath();
-      this.ctx.stroke();
+      this.backgroundTexture = document.getElementById("backgroundTex");
+      this.ctx.drawImage(this.backgroundTexture, 0, 0, canvasWidth, canvasHeight);
     }
 
-     displayNorthWall(xPos, yPos)
+    drawWall(x1, y1, x2, y2)
+    {
+      let wallThickness = 4;
+      // this.ctx.strokeStyle = "#000000";
+      // this.ctx.beginPath();
+      // this.ctx.moveTo(x1, y1);
+      // this.ctx.lineTo(x2, y2);
+      // this.ctx.closePath();
+      // this.ctx.stroke();
+      this.ctx.fillStyle = "black";
+    //  console.log(`${x1-wallThickness}, ${y1-wallThickness}, ${(x2-x1)+wallThickness}, ${(y2-y1)+wallThickness}`);
+      this.ctx.drawImage(this.wallTexture, x1-wallThickness, y1-wallThickness, (x2-x1)+wallThickness, (y2-y1)+wallThickness);
+    }
+
+    displayNorthWall(xPos, yPos)
     {
       this.drawWall(xPos*this.blockWidth, yPos*this.blockHeight, (xPos*this.blockWidth)+this.blockWidth, yPos*this.blockHeight);
     }
 
-     displayEastWall(xPos, yPos)
+    displayEastWall(xPos, yPos)
     {
       this.drawWall((xPos*this.blockWidth)+this.blockWidth, yPos*this.blockHeight, (xPos*this.blockWidth)+this.blockWidth, (yPos*this.blockHeight)+this.blockHeight);
     }
 
-     displaySouthWall(xPos, yPos)
+    displaySouthWall(xPos, yPos)
     {
       this.drawWall(xPos*this.blockWidth, (yPos*this.blockHeight)+this.blockHeight, (xPos*this.blockWidth)+this.blockWidth, (yPos*this.blockHeight)+this.blockHeight);
     }
 
-     displayWestWall(xPos, yPos)
+    displayWestWall(xPos, yPos)
     {
       this.drawWall(xPos*this.blockWidth, yPos*this.blockHeight, (xPos*this.blockWidth), (yPos*this.blockHeight)+this.blockHeight);
     }
 
-     displayBlockWalls(xPos, yPos, block)
+   displayBlockWalls(xPos, yPos, block)
     {
       if (block.walls[0])
       {
@@ -142,10 +162,10 @@ class MazeRenderer
       }
     }
 
-     displayBlockSolid(xPos, yPos, block)
+    displayBlockSolid(xPos, yPos, block)
     {
       ctx.beginPath();
-      ctx.rect(xPos*this.blockWidth, yPos*this.blockHeight, this.blockWidth, this.blockHeight);
+    //  ctx.rect(xPos*this.blockWidth, yPos*this.blockHeight, this.blockWidth, this.blockHeight);
       if (block.visited)
       {
       ctx.fillStyle = "red";
@@ -187,7 +207,7 @@ class MazeGenerator
           this.maze.grid[x][y].walls[direction] = false;
           this.maze.grid[nx][ny].walls[OPPOSITE[direction]] = false;
           this.carveFrom(nx, ny, renderer);
-          renderer.displayMaze(this.maze);
+          //renderer.displayMaze(this.maze);
         //  alert("step");
         }
       }
@@ -206,6 +226,7 @@ class MazeGenerator
 let ctx;
 
 let renderer = new MazeRenderer();
+let globalMaze = new Maze();
 
 function setup()
 {
@@ -216,13 +237,11 @@ function setup()
 //  renderer.displayMaze(generator.maze);
 
   let generator = new MazeGenerator();
+  generator.maze = globalMaze
   generator.generateMaze(renderer);
-
-
+  window.requestAnimationFrame(function () { renderer.displayMaze(globalMaze); }.bind(renderer));
+  document.addEventListener("keydown", function (e) { console.log("h???"); renderer.updateFrame = true; });
 }
 
 console.log("Hey");
 document.addEventListener("DOMContentLoaded", function () { setup(); });
-
-window.requestAnimationFrame(function () { renderer.displayMaze }.bind(renderer));
-//setInterval(100, renderer.displayMaze);
