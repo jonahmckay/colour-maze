@@ -33,6 +33,60 @@ function shuffle(array) {
   }
 }
 
+class Animation
+{
+  constructor()
+  {
+    this.currentFrame = 0;
+    this.frameCount = null;
+  }
+  nextFrame()
+  {
+    this.currentFrame++;
+    if (this.currentFrame >= this.frameCount)
+    {
+      this.currentFrame = 0;
+    }
+  }
+}
+
+class RotationAnimation extends Animation
+{
+  constructor()
+  {
+    super(Animation);
+    this.clockwise = true;
+
+  }
+
+  getAngle()
+  {
+    let angle = (Math.PI*2)*(this.currentFrame/(this.frameCount-1));
+    if (!this.clockwise)
+    {
+      angle = -angle;
+    }
+    return angle;
+  }
+}
+
+class ValueAnimation extends Animation
+{
+  constructor()
+  {
+    super(Animation);
+    this.startValue = 0;
+    this.endValue = 255;
+    this.valueDifference = startValue-endValue;
+  }
+
+  getValue()
+  {
+    let value = this.startValue + (this.valueDifference*(this.currentFrame/(this.frameCount-1)));
+    return value;
+  }
+}
+
 class Player
 {
   constructor()
@@ -199,7 +253,7 @@ class Maze
     this.width = 17;
     this.height = 17;
 
-    this.deadSize = 4;
+    this.deadSize = 7;
     this.grid = [];
     this.initialize();
   }
@@ -315,6 +369,7 @@ class GameRenderer
       this.wallTexture = document.getElementById("wallTex");
       this.updateFrame = true;
       this.loadedWallTiles = new AssetLibrary();
+      this.characterSprites = new AssetLibrary();
       this.assetsLoaded = false;
 
       // this.canvasWidth = window.innerWidth;
@@ -327,14 +382,21 @@ class GameRenderer
       this.canvasSquareSize = Math.min(this.canvasWidth, this.canvasHeight)-(this.marginMinimum*2);
 
       this.mazeCanvas = document.createElement("canvas");
-      this.mazeCanvas.width = this.canvasSquareSize;
-      this.mazeCanvas.height = this.canvasSquareSize;
       this.m_ctx = this.mazeCanvas.getContext("2d");
+      this.resizeCanvas(this.m_ctx, this.canvasSquareSize);
 
       this.mazeTextureCanvas = document.createElement("canvas");
-      this.mazeTextureCanvas.width = this.canvasSquareSize;
-      this.mazeTextureCanvas.height = this.canvasSquareSize;
       this.t_ctx = this.mazeTextureCanvas.getContext("2d");
+      this.resizeCanvas(this.m_ctx, this.canvasSquareSize);
+
+      this.characterCanvas = document.createElement("canvas");
+      this.c_ctx = this.characterCanvas.getContext("2d");
+      this.resizeCanvas(this.c_ctx, this.blockWidth, this.blockHeight);
+
+      this.animations = {};
+      let characterAnimation = new RotationAnimation();
+      characterAnimation.frameCount = 20;
+      this.addAnimation("character", characterAnimation);
 
       for (let i = 0; i < WALL_TILES.length; i++)
       {
@@ -342,8 +404,20 @@ class GameRenderer
         let tileSrc = `imgs/tiles/${tileName}`;
         this.loadedWallTiles.addAsset(tileName, tileSrc);
       }
+      this.characterSprites.addAsset("character", "imgs/character/character.png");
 
       this.scaleCanvases();
+    }
+
+    addAnimation(name, animation)
+    {
+        this.animations[name] = animation;
+    }
+
+    resizeCanvas(context, width, height)
+    {
+      context.canvas.width = width;
+      context.canvas.height = height;
     }
 
     scaleCanvases()
@@ -359,14 +433,10 @@ class GameRenderer
         this.squareHeightOffset = Math.floor((Math.max(0, this.canvasHeight-this.canvasWidth)+this.marginMinimum)/2);
         this.canvasSquareSize = Math.min(this.canvasWidth, this.canvasHeight)-(this.marginMinimum);
 
-        this.ctx.canvas.width  = window.innerWidth;
-        this.ctx.canvas.height = window.innerHeight;
-
-        this.m_ctx.canvas.width  = this.canvasSquareSize;
-        this.m_ctx.canvas.height = this.canvasSquareSize;
-
-        this.t_ctx.canvas.width  = this.canvasSquareSize;
-        this.t_ctx.canvas.height = this.canvasSquareSize;
+        this.resizeCanvas(this.ctx, window.innerWidth, window.innerHeight);
+        this.resizeCanvas(this.m_ctx, this.canvasSquareSize, this.canvasSquareSize);
+        this.resizeCanvas(this.t_ctx, this.canvasSquareSize, this.canvasSquareSize);
+        this.resizeCanvas(this.c_ctx, Math.floor(this.blockWidth), Math.floor(this.blockHeight));
       }
     }
 
@@ -379,11 +449,18 @@ class GameRenderer
         this.ctx.clearRect(0, 0, this.canvasWidth, this.canvasHeight);
         this.m_ctx.clearRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
         this.t_ctx.clearRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
+        this.c_ctx.clearRect(0, 0, this.blockWidth, this.blockHeight);
 
         this.displayBackground();
         this.displayMaze(game.currentMaze);
         this.displayCharacter(game);
       }
+
+      for (let i = 0; i < Object.keys(this.animations).length; i++)
+      {
+        this.animations[Object.keys(this.animations)[i]].nextFrame();
+      }
+
       window.requestAnimationFrame(function () { this.renderLoop(game); }.bind(this));
     }
 
@@ -399,11 +476,22 @@ class GameRenderer
         playerX = ((game.player.xPos*Math.abs(game.player.moveSubstep-1))+(game.player.currentPath[0][0]*game.player.moveSubstep));
         playerY = ((game.player.yPos*Math.abs(game.player.moveSubstep-1))+(game.player.currentPath[0][1]*game.player.moveSubstep));
       }
-      this.ctx.rect((playerX*this.blockWidth+7)+this.squareWidthOffset, (playerY*this.blockHeight+7)+this.squareHeightOffset, this.blockWidth-14, this.blockHeight-14);
-
-      this.ctx.fillStyle = "red";
-
-      this.ctx.fill();
+      if (this.characterSprites.loadingAssets)
+      {
+      //  console.log("!")
+        this.c_ctx.save();
+        this.c_ctx.translate(this.blockWidth*0.5, this.blockHeight*0.5);
+        this.c_ctx.rotate(this.animations["character"].getAngle());
+        this.c_ctx.translate(-this.blockWidth*0.5, -this.blockHeight*0.5);
+        this.c_ctx.drawImage(this.characterSprites.assets["character"], 7, 7, this.blockWidth-14, this.blockHeight-14);
+        this.c_ctx.restore();
+        this.ctx.drawImage(this.c_ctx.canvas, (playerX*this.blockWidth)+this.squareWidthOffset, (playerY*this.blockHeight)+this.squareHeightOffset, this.blockWidth, this.blockHeight);
+      }
+      // this.ctx.rect((playerX*this.blockWidth+7)+this.squareWidthOffset, (playerY*this.blockHeight+7)+this.squareHeightOffset, this.blockWidth-14, this.blockHeight-14);
+      //
+      // this.ctx.fillStyle = "red";
+      //
+      // this.ctx.fill();
     }
 
     displayMaze(maze)
@@ -456,7 +544,7 @@ class GameRenderer
     displayBackground()
     {
       //this.backgroundTexture = document.getElementById("backgroundTex");
-      this.ctx.fillStyle = "black";
+      this.ctx.fillStyle = "darkred";
       this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
     }
 
