@@ -2,10 +2,19 @@
 
 // directions: [N, E, S, W]
 
-let DX = [0, 1, 0, -1];
-let DY = [-1, 0, 1, 0];
+const MAZE_WIDTH = 18;
+const MAZE_HEIGHT = 18;
+//constants representing difference in position based on
+//direction ID
+const DX = [0, 1, 0, -1];
+const DY = [-1, 0, 1, 0];
 
-let OPPOSITE = [2, 3, 0, 1];
+//Quadrant shifts from 0, 0 as top left quadrant to 1, 1 as bottom right
+const QDX = [0, 1, 1, 0];
+const QDY = [0, 0, 1, 1];
+
+//Cosntant to get the opposite of a direction based on its ID
+const OPPOSITE = [2, 3, 0, 1];
 
 const WALL_TILES = [
   "-wall.png",
@@ -26,6 +35,7 @@ const WALL_TILES = [
   "w-wall.png"
 ];
 
+//Helper function, shuffles an array.
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
     let j = Math.floor(Math.random() * (i + 1));
@@ -33,13 +43,34 @@ function shuffle(array) {
   }
 }
 
+class SoundPlayer
+{
+  constructor()
+  {
+
+  }
+}
+
+class Song
+{
+  constructor()
+  {
+
+  }
+}
+
+//Increments every game tick in the Game class. Has multiple subclasses
+//for specific usecases.
 class Animation
 {
   constructor()
   {
     this.currentFrame = 0;
+    this.startTime = 0;
     this.frameCount = null;
+    this.timeDivider = 1;
   }
+
   nextFrame()
   {
     this.currentFrame++;
@@ -48,8 +79,15 @@ class Animation
       this.currentFrame = 0;
     }
   }
+
+  getCurrentFrame(currentTime)
+  {
+    let frame = Math.floor((currentTime - this.startTime)/this.timeDivider) % this.frameCount;
+    return frame;
+  }
 }
 
+//Allows you to make an a rotation animation
 class RotationAnimation extends Animation
 {
   constructor()
@@ -59,9 +97,10 @@ class RotationAnimation extends Animation
 
   }
 
-  getAngle()
+  //Gets the current angle of the animation, in radians.
+  getAngle(currentTime)
   {
-    let angle = (Math.PI*2)*(this.currentFrame/(this.frameCount-1));
+    let angle = (Math.PI*2)*(this.getCurrentFrame(currentTime)/(this.frameCount-1));
     if (!this.clockwise)
     {
       angle = -angle;
@@ -87,6 +126,8 @@ class ValueAnimation extends Animation
   }
 }
 
+//Layer class, drawn each frame. Essentially a wrapper for an HTML5 canvas
+//and a position offset.
 class Layer
 {
   constructor(xPos, yPos, xSize, ySize)
@@ -116,6 +157,7 @@ class Layer
   }
 }
 
+//TODO: make this better, beginnings of a particle system
 class Particle
 {
   constructor()
@@ -131,12 +173,77 @@ class Particle
   }
 }
 
+class DisplayElement
+{
+  constructor()
+  {
+    this.xPos = 0;
+    this.yPos = 0;
+    this.layer = "standard";
+  }
+}
+
+class Trail
+{
+  constructor()
+  {
+    this.nodes = [];
+    this.maxLength = 10;
+  }
+
+  addNode(node)
+  {
+    if (this.nodes.length >= this.maxLength)
+    {
+      while (this.nodes.length >= this.maxLength)
+      {
+        this.nodes.shift();
+      }
+    }
+    this.nodes.push(node);
+  }
+
+  displayTrail(layer)
+  {
+    layer.ctx.lineWidth = 20;
+    for (let i = 0; i < this.nodes.length-1; i++)
+    {
+      let n1 = this.nodes[i];
+      let n2 = this.nodes[i+1];
+      let gradient = layer.ctx.createLinearGradient(n1.xPos, n1.yPos, n2.xPos, n2.yPos);
+      gradient.addColorStop("0", n1.colour);
+      gradient.addColorStop("1", n2.colour);
+      layer.ctx.strokeStyle = gradient;
+
+      layer.ctx.beginPath();
+      layer.ctx.moveTo(n1.xPos, n1.yPos);
+      layer.ctx.lineTo(n2.xPos, n2.yPos);
+      layer.ctx.stroke();
+    }
+  }
+}
+
+class TrailNode
+{
+  constructor(x, y)
+  {
+    this.xPos = x;
+    this.yPos = y;
+    this.colour = "#666666";
+  }
+}
+
+//Stores information about the player, including their position and movement.
+//Has path finding and movement functions.
 class Player
 {
   constructor()
   {
     this.xPos = 0;
     this.yPos = 0;
+    this.currentQuadrant = 0;
+
+    this.playerTrail = new Trail();
 
     this.currentPath = [];
     this.moving = false;
@@ -144,6 +251,7 @@ class Player
     this.moveIncrement = 0.5;
   }
 
+  //Starts a pathfinding sequence in the direction given.
   moveInDirection(maze, direction)
   {
      if (!maze.grid[this.xPos][this.yPos].walls[direction])
@@ -188,7 +296,7 @@ class Player
     return path;
   }
 
-  updateMovement()
+  updateMovement(maze)
   {
     if (this.moving)
     {
@@ -198,9 +306,23 @@ class Player
         this.xPos = this.currentPath[0][0];
         this.yPos = this.currentPath[0][1];
         this.moveSubstep = this.moveSubstep-1;
+
+        //NOTE: pretty hacky, uses global game variable
+        let blockWidth = game.renderer.blockWidth;
+        let blockHeight = game.renderer.blockHeight;
+
+        let trailNode = new TrailNode((this.xPos*blockWidth)+(blockWidth/2), (this.yPos*blockHeight)+(blockHeight/2));
+        this.playerTrail.addNode(trailNode);
+
         if (this.currentPath.length > 1)
         {
           this.currentPath.shift();
+          let currentBlock = maze.grid[this.xPos][this.yPos];
+          if (currentBlock.walls[this.currentPath[0]])
+          {
+            this.currentPath = [];
+            this.moving = false;
+          }
         }
         else
         {
@@ -210,8 +332,15 @@ class Player
     }
   }
 
+  movePosition(maze, x, y)
+  {
+    this.xPos += x;
+    this.yPos += y;
+    this.currentQuadrant = maze.getPositionQuadrant(x, y);
+  }
 }
 
+//???
 class MovementPath
 {
   constructor()
@@ -220,40 +349,52 @@ class MovementPath
   }
 }
 
+//Game function.
 class Game
 {
   constructor()
   {
+    this.generator = undefined;
     this.player = new Player();
-    this.currentMaze = new Maze();
+    this.currentMaze = new Maze(MAZE_WIDTH, MAZE_HEIGHT);
+    //this.quadrants = [];
+    this.gameTime = 0;
+    this.quadrantsVisited = [true, false, false, false];
+    this.quadrantsRegenerated = [false, true, true, true];
+    this.currentQuadrant = 0;
     this.renderer = new GameRenderer();
   }
 
+  //Runs every game tick (arbitrary value, currently every 1/20 seconds)
+  //TODO: Maybe updating each frame would be smarter, and using the
+  //returned time stamp to determine time passed to avoid framerate changing
+  //game speed?
+
   gameLoop()
   {
-    this.player.updateMovement();
+    this.player.updateMovement(this.currentMaze);
+    if (this.currentMaze.getPositionQuadrant(this.player.xPos, this.player.yPos) !== this.currentQuadrant)
+    {
+      this.currentQuadrant = this.currentMaze.getPositionQuadrant(this.player.xPos, this.player.yPos);
+      this.quadrantsVisited[this.currentQuadrant] = true;
+      this.quadrantsRegenerated[this.currentQuadrant] = false;
+      let oppositeQuadrant = (this.currentQuadrant+2)%4;
+      if (!this.quadrantsRegenerated[oppositeQuadrant])
+      {
+        this.generator.quadrants[oppositeQuadrant] = this.generator.generateQuadrant(oppositeQuadrant);
+        this.currentMaze.grid = this.generator.stitchQuadrants(this.generator.quadrants);
+        this.quadrantsRegenerated[oppositeQuadrant] = true;
+        this.quadrantsVisited[oppositeQuadrant] = false;
+      }
+    }
+    this.gameTime++;
   }
 
+  //Function run when a button event occurs.
   buttonPressed(e)
   {
     this.renderer.updateFrame = true;
 
-    // if (e.key === 's')
-    // {
-    //   this.player.yPos += 1;
-    // }
-    // else if (e.key === 'w')
-    // {
-    //   this.player.yPos += -1;
-    // }
-    // else if (e.key === 'a')
-    // {
-    //   this.player.xPos += -1;
-    // }
-    // else if (e.key === 'd')
-    // {
-    //   this.player.xPos += 1;
-    // }
     if (!this.player.moving)
     {
       if (e.key === 's')
@@ -292,6 +433,7 @@ class Game
   }
 }
 
+//Represents a block in the maze.
 class Block
 {
   constructor()
@@ -302,20 +444,33 @@ class Block
   }
 }
 
+//Represents the maze.
 class Maze
 {
-  constructor()
+  constructor(width, height, quadrant)
   {
-    this.width = 17;
-    this.height = 17;
+    this.width = width;
+    this.height = height;
 
-    this.deadSize = 7;
+    //"deadSize" is the size of the deadspace in the middle.
+    this.deadSize = 6;
+
+    //grid is a 2 dimensional array of Block objects.
     this.grid = [];
-    this.initialize();
+    if (quadrant === undefined)
+    {
+      this.initialize();
+    }
+    else
+    {
+      this.initializeAsQuadrant(quadrant);
+    }
   }
 
   initialize()
   {
+    //Populate the grid matrix with Blocks, and make the appropriate space in the
+    //middle "dead"
     for (let x = 0; x < this.width; x++)
     {
       this.grid.push([]);
@@ -329,16 +484,36 @@ class Maze
             }
       }
     }
-    console.log("maze initializsatipon done");
   }
 
+  initializeAsQuadrant(quadrant)
+  {
+    for (let x = 0; x < this.width; x++)
+    {
+      this.grid.push([]);
+
+      for (let y = 0; y < this.height; y++)
+      {
+        let adjustedX = (this.width*QDX[quadrant])+x;
+        let adjustedY = (this.height*QDY[quadrant])+y;
+        this.grid[x].push(new Block());
+        if ((adjustedX < Math.floor(this.deadSize/2)+Math.floor(this.width) && adjustedX >= (this.width)-Math.floor(this.deadSize/2)) &&
+            (adjustedY < Math.floor(this.deadSize/2)+Math.floor(this.height) && adjustedY >= (this.height)-Math.floor(this.deadSize/2)) )
+            {
+              this.grid[x][y].dead = true;
+            }
+      }
+    }
+  }
+
+  //Gets the quadrant of any given x/y position in the maze
   getPositionQuadrant(x, y)
   {
     //Quadrants clockwise from a 0 top-left
     let top = null;
     let left = null;
 
-    if (x < Math.floor(this.width/2))
+    if (y < Math.floor(this.width/2))
     {
       top = true;
     }
@@ -347,7 +522,7 @@ class Maze
       top = false;
     }
 
-    if (y < Math.floor(this.height/2))
+    if (x < Math.floor(this.height/2))
     {
       left = true;
     }
@@ -379,6 +554,8 @@ class Maze
   }
 }
 
+//An asset is a wrapper around an image that avoids issues with using images
+//before they've loaded. Used with AssetLibrary objects.
 class Asset
 {
   constructor(url, onload)
@@ -389,10 +566,14 @@ class Asset
   }
 }
 
+//AnimatedAssets are Assets that automatically read spritesheet images (horizontal) as individual
+//frames and stores them for use in its .frames property.
 class AnimatedAsset
 {
   constructor(url, onload, width, height)
   {
+    //combine the given onload function with one that also makes frames from the
+    //given image.
     let onloadfunction = function () { console.log("animated loaded"); onload(); this.makeFrames() }.bind(this);
 
     this.image = new Image();
@@ -404,6 +585,8 @@ class AnimatedAsset
     this.frames = [];
   }
 
+  //On load, read this asset's image as a sprite sheet, and store the images in
+  //this.frames.
   makeFrames(img, width, height)
   {
     let frameCount = Math.floor(this.image.width/this.width);
@@ -420,6 +603,8 @@ class AnimatedAsset
   }
 }
 
+//Used to give names to images and sprite animations. Lets you check to see if an
+//asset is fully loaded before use.
 class AssetLibrary
 {
   constructor()
@@ -460,12 +645,14 @@ class AssetLibrary
   }
 }
 
+//Class that handles the display of the game. Loooooong.
 class GameRenderer
 {
     constructor()
     {
       this.canvas = document.getElementById("canvas");
       this.ctx = this.canvas.getContext("2d");
+      this.renderTick = 0;
 
       this.blockWidth = 30;
       this.blockHeight = 30;
@@ -499,8 +686,13 @@ class GameRenderer
       window.innerWidth, window.innerHeight);
       this.addLayer("deadSpace", 0, 0,
       this.canvasSquareSize, this.canvasSquareSize);
+      this.addLayer("mazeParticles", this.squareWidthOffset, this.squareHeightOffset,
+      this.canvasSquareSize, this.canvasSquareSize);
 
-      this.layerOrder = ["standard"];
+      this.layerOrder = ["standard", "mazeParticles"];
+
+      this.generalAssets = new AssetLibrary();
+      this.generalAssets.addAsset("background", "imgs/background.jpg");
 
       let deadspaceAnimation = new Animation();
       deadspaceAnimation.frameCount = 44;
@@ -508,15 +700,18 @@ class GameRenderer
       this.deadspaceSheets = new AssetLibrary();
       this.deadspaceSheets.addAnimatedAsset("deadspacechar1", "imgs/deadspace/deadspaceanimation1.png", 256, 248);
 
+      this.characterSprites.addAnimatedAsset("charactersheet", "imgs/character/characteranimation.png", 256, 256);
+
       this.activeSheets = {};
 
       this.sheetsLoaded = false;
 
       this.animations = {};
-      let characterAnimation = new RotationAnimation();
-      characterAnimation.frameCount = 20;
+
+      let characterAnimation = new Animation();
+      characterAnimation.frameCount = 296;
       this.addAnimation("character", characterAnimation);
-      this.addAnimation("deadspace", deadspaceAnimation)
+      this.addAnimation("deadspace", deadspaceAnimation);
 
       for (let i = 0; i < WALL_TILES.length; i++)
       {
@@ -525,9 +720,6 @@ class GameRenderer
         this.loadedWallTiles.addAsset(tileName, tileSrc);
       }
       this.characterSprites.addAsset("character", "imgs/character/character.png");
-
-      this.generalAssets = new AssetLibrary();
-      this.generalAssets.addAsset("background", "imgs/background.jpg");
 
 
       this.scaleLayers();
@@ -579,6 +771,8 @@ class GameRenderer
         this.layers["character"].setSize(this.blockWidth, this.blockHeight);
         this.layers["deadSpace"].setSize(this.canvasSquareSize, this.canvasSquareSize);
         this.layers["deadSpace"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
+        this.layers["mazeParticles"].setSize(this.canvasSquareSize, this.canvasSquareSize);
+        this.layers["mazeParticles"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
       }
     }
     resizeCanvas(context, width, height)
@@ -612,22 +806,29 @@ class GameRenderer
       }
 
       window.requestAnimationFrame(function () { this.renderLoop(game); }.bind(this));
+
+      this.renderTick++;
     }
 
     displayDeadspace(game)
     {
       if (this.deadspaceSheets.getAsset("deadspacechar1").frames.length > 0)
       {
-        let frame = this.deadspaceSheets.getAsset("deadspacechar1").frames[Math.floor(this.animations["deadspace"].currentFrame/4)];
+        let frame = this.deadspaceSheets.getAsset("deadspacechar1").frames[Math.floor(this.animations["deadspace"].getCurrentFrame(this.renderTick)/4)];
         this.layers["deadSpace"].ctx.drawImage(frame, 0, 0, frame.width, frame.height);
-        this.ctx.drawImage(frame, this.squareWidthOffset+((game.currentMaze.width/2)*this.blockWidth)-((game.currentMaze.deadSize/3)*this.blockWidth),
-        this.squareHeightOffset+((game.currentMaze.width/2)*this.blockHeight)-((game.currentMaze.deadSize/3)*this.blockHeight),
-         (game.currentMaze.deadSize*this.blockWidth)/1.5, (game.currentMaze.deadSize*this.blockHeight)/1.5);
+        this.ctx.drawImage(frame, this.squareWidthOffset+((game.currentMaze.width/2)*this.blockWidth)-((game.currentMaze.deadSize/2)*this.blockWidth),
+        this.squareHeightOffset+((game.currentMaze.width/2)*this.blockHeight)-((game.currentMaze.deadSize/2)*this.blockHeight),
+         (game.currentMaze.deadSize*this.blockWidth)/1, (game.currentMaze.deadSize*this.blockHeight)/1);
       }
     }
 
     displayCharacter(game)
     {
+      //display trail
+
+      game.player.playerTrail.displayTrail(this.layers["mazeParticles"]);
+
+      //display character
       this.ctx.beginPath();
       this.layers["character"].ctx.clearRect(0, 0, this.blockWidth, this.blockHeight);
       let playerX = game.player.xPos;
@@ -640,13 +841,9 @@ class GameRenderer
       }
       if (this.characterSprites.loadingAssets)
       {
-      //  console.log("!")
-        this.layers["character"].ctx.save();
-        this.layers["character"].ctx.translate(this.blockWidth*0.5, this.blockHeight*0.5);
-        this.layers["character"].ctx.rotate(this.animations["character"].getAngle());
-        this.layers["character"].ctx.translate(-this.blockWidth*0.5, -this.blockHeight*0.5);
-        this.layers["character"].ctx.drawImage(this.characterSprites.getAsset("character").image, 7, 7, this.blockWidth-14, this.blockHeight-14);
-        this.layers["character"].ctx.restore();
+        this.layers["character"].ctx.drawImage(
+          this.characterSprites.getAsset("charactersheet").frames[Math.floor(this.animations["character"].currentFrame/8)],
+          2, 2, this.blockWidth-4, this.blockHeight-4);
         this.ctx.drawImage(this.layers["character"].canvas, (playerX*this.blockWidth)+this.squareWidthOffset, (playerY*this.blockHeight)+this.squareHeightOffset, this.blockWidth, this.blockHeight);
       }
       // this.ctx.rect((playerX*this.blockWidth+7)+this.squareWidthOffset, (playerY*this.blockHeight+7)+this.squareHeightOffset, this.blockWidth-14, this.blockHeight-14);
@@ -660,7 +857,8 @@ class GameRenderer
     {
       if (this.updateFrame && this.loadedWallTiles.loadingAssets.length === 0 && this.generalAssets.loadingAssets.length === 0)
       {
-
+        this.layers["maze"].clear();
+        this.layers["mazeTexture"].clear();
         this.blockWidth = this.canvasSquareSize/maze.width;
         this.blockHeight = this.canvasSquareSize/maze.height;
 
@@ -697,8 +895,6 @@ class GameRenderer
 
         this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-over";
         this.ctx.drawImage(this.layers["mazeTexture"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
-        //this.updateFrame = false;
-
       }
 
     }
@@ -721,7 +917,6 @@ class GameRenderer
       this.layers["maze"].ctx.stroke();
       this.layers["maze"].ctx.closePath();
     //   this.ctx.fillStyle = "black";
-    // //  console.log(`${x1-wallThickness}, ${y1-wallThickness}, ${(x2-x1)+wallThickness}, ${(y2-y1)+wallThickness}`);
     //   this.ctx.drawImage(this.wallTexture, x1-(wallThickness/2), y1-(wallThickness/2), (x2-x1)+wallThickness, (y2-y1)+wallThickness);
     }
 
@@ -803,20 +998,29 @@ class GameRenderer
 
 }
 
+//Generates the maze
 class MazeGenerator
 {
   constructor()
   {
-    this.maze = new Maze();
+    this.maze = new Maze(MAZE_WIDTH, MAZE_HEIGHT);
+    this.quadrants = [];
   }
 
-  carveFrom(x, y, renderer)
+  generateQuadrant(quadrant)
+  {
+    let quadrantWidth = Math.floor(MAZE_WIDTH/2);
+    let quadrantHeight = Math.floor(MAZE_HEIGHT/2);
+    let newQuadrant = new Maze(quadrantWidth, quadrantHeight, quadrant);
+    this.carveFrom(newQuadrant, QDX[quadrant]*(quadrantWidth-1), QDY[quadrant]*(quadrantHeight-1));
+    return newQuadrant
+  }
+
+  carveFrom(maze, x, y)
   {
     let directions = [0, 1, 2, 3];
     shuffle(directions);
-    //let directions = Math.floor(Math.random()*4);
-
-    this.maze.grid[x][y].visited = true;
+    maze.grid[x][y].visited = true;
     for (let i = 0; i <= 3; i++)
     {
       let direction = directions[i];
@@ -824,23 +1028,74 @@ class MazeGenerator
       let nx = x+DX[direction];
       let ny = y+DY[direction];
 
-      if (nx >= 0 && ny >= 0 && nx < this.maze.width && ny < this.maze.height)
+      if (nx >= 0 && ny >= 0 && nx < maze.width && ny < maze.height)
       {
-        if (!this.maze.grid[nx][ny].visited && !this.maze.grid[nx][ny].dead)
+        if (!maze.grid[nx][ny].visited && !maze.grid[nx][ny].dead)
         {
-          this.maze.grid[x][y].walls[direction] = false;
-          this.maze.grid[nx][ny].walls[OPPOSITE[direction]] = false;
-          this.carveFrom(nx, ny, renderer);
-          //renderer.displayMaze(this.maze);
-        //  alert("step");
+          maze.grid[x][y].walls[direction] = false;
+          maze.grid[nx][ny].walls[OPPOSITE[direction]] = false;
+          this.carveFrom(maze, nx, ny);
         }
       }
     }
   }
 
-  generateMaze(renderer)
+  stitchQuadrants(quadrants)
   {
-    this.carveFrom(0, 0, renderer);
+    let quadrantWidth = quadrants[0].width;
+    let quadrantHeight = quadrants[0].height;
+
+    //create base grid to be filled with quadrant info
+    let newGrid = [];
+    for (let x = 0; x < MAZE_WIDTH; x++)
+    {
+      newGrid.push([]);
+      for (let y = 0; y < MAZE_HEIGHT; y++)
+      {
+        newGrid[x].push(null);
+      }
+    }
+
+    //fill grid with quadrant info
+    for (let i = 0; i <= 3; i++)
+    {
+      for (let x = 0; x < quadrantWidth; x++)
+      {
+        for (let y = 0; y < quadrantHeight; y++)
+        {
+            newGrid[x+(quadrantWidth*QDX[i])][y+(quadrantHeight*QDY[i])] = quadrants[i].grid[x][y];
+        }
+      }
+    }
+
+    //break down the walls between the quadrants
+    for (let x = 0; x < MAZE_WIDTH; x++)
+    {
+      this.makeTunnel(newGrid, x, quadrantHeight-1, 2);
+    }
+    for (let y = 0; y < MAZE_HEIGHT; y++)
+    {
+      this.makeTunnel(newGrid, quadrantWidth-1, y, 1);
+    }
+
+    return newGrid;
+  }
+
+  makeTunnel(grid, xPos, yPos, direction)
+  {
+    grid[xPos][yPos].walls[direction] = false;
+    grid[xPos+DX[direction]][yPos+DY[direction]].walls[OPPOSITE[direction]] = false;
+  }
+
+  generateMaze()
+  {
+    //this.carveFrom(this.maze, 0, 0);
+    for (let i = 0; i <= 3; i++)
+    {
+      let newQuadrant = this.generateQuadrant(i);
+      this.quadrants.push(newQuadrant);
+    }
+    this.maze.grid = this.stitchQuadrants(this.quadrants);
   }
 }
 
@@ -855,16 +1110,22 @@ let game;
 
 function setup()
 {
-  globalMaze = new Maze();
+  globalMaze = new Maze(MAZE_WIDTH, MAZE_HEIGHT);
   game = new Game();
 
   let generator = new MazeGenerator();
+  game.generator = generator;
   generator.maze = globalMaze
-  generator.generateMaze(game.renderer);
+  generator.generateMaze();
   game.currentMaze = globalMaze;
+
+  //Display loop.
   window.requestAnimationFrame(function () { game.renderer.renderLoop(game); }.bind(game.renderer));
+
+  //"keydown" event handler.
   document.addEventListener("keydown", function (e) { game.buttonPressed(e) });
 
+  //"game loop" interval.
   setInterval(function() { game.gameLoop() }.bind(game), 50)
 }
 
