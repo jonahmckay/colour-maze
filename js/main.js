@@ -43,6 +43,69 @@ function shuffle(array) {
   }
 }
 
+class SupporterZone
+{
+  constructor(x, y, w, h)
+  {
+    this.width = w;
+    this.height = h;
+    this.xPos = x;
+    this.yPos = y;
+
+    this.canvas = document.createElement('canvas');
+    this.ctx = this.canvas.getContext('2d');
+  }
+  setSize(x, y)
+  {
+    this.width = x;
+    this.height = y;
+
+    this.canvas.width = x;
+    this.canvas.height = y;
+  }
+  setPosition(x, y)
+  {
+    this.xPos = x;
+    this.yPos = y;
+  }
+  drawToContext(ctx, x, y)
+  {
+
+  }
+}
+
+//for displaying animations and HUD elements
+
+class OverlayElement
+{
+  constructor()
+  {
+    this.xPos;
+    this.yPos;
+    this.width;
+    this.height;
+    this.asset;
+    if (this.asset.frames !== undefined)
+    {
+      this.animation = new Animation();
+      this.animation.startTime = game.renderer.renderTick;
+      this.animation.frameCount = this.asset.frames.length;
+    }
+  }
+  getImage()
+  {
+    //assume is an animatedasset
+    if (this.animation !== undefined)
+    {
+      return this.asset.frames[this.animation.getCurrentFrame(game.renderer.renderTick)];
+    }
+    else
+    {
+      return this.asset.image;
+    }
+  }
+}
+
 class SoundPlayer
 {
   constructor()
@@ -477,7 +540,8 @@ class Game
     {
       newQuadrant.colours.push(triad[i]);
     }
-    newQuadrant.cacheBackgroundFromAsset(this.renderer.assets.getAsset("quadrantbackground"));
+    let assetName = `quad${quadrant}`;
+    newQuadrant.cacheBackgroundFromAsset(this.renderer.assets.getAsset(assetName));
     this.quadrants[quadrant] = newQuadrant;
   }
 
@@ -828,8 +892,10 @@ class GameRenderer
       this.canvasSquareSize, this.canvasSquareSize);
       this.addLayer("mazeParticles", this.squareWidthOffset, this.squareHeightOffset,
       this.canvasSquareSize, this.canvasSquareSize);
+      this.addLayer("supporters", 0, 0,
+      window.innerWidth, window.innerHeight);
 
-      this.layerOrder = ["standard", "mazeParticles"];
+      this.layerOrder = ["standard", "mazeParticles", "supporters"];
 
       this.assets = new AssetLibrary();
       this.assets.addAsset("background", "imgs/background.jpg");
@@ -847,6 +913,8 @@ class GameRenderer
 
       this.animations = {};
 
+      this.supporterZones = {};
+
       let characterAnimation = new Animation();
       characterAnimation.frameCount = 296;
       this.addAnimation("character", characterAnimation);
@@ -862,8 +930,51 @@ class GameRenderer
       this.assets.addAsset("character", "imgs/character/character.png");
       this.assets.addAsset("quadrantbackground", "imgs/quadrantbackground.png");
 
+      this.assets.addAsset("quad0", "imgs/quads/quad0.png");
+      this.assets.addAsset("quad1", "imgs/quads/quad1.png");
+      this.assets.addAsset("quad2", "imgs/quads/quad2.png");
+      this.assets.addAsset("quad3", "imgs/quads/quad3.png");
+
 
       this.scaleLayers();
+      this.initializeSupporterZones();
+    }
+
+    initializeSupporterZones()
+    {
+      this.supporterZones["S0"] = new SupporterZone(0, 0, 0, 0);
+      this.supporterZones["S1"] = new SupporterZone(0, 0, 0, 0);
+
+      this.supporterZones["B0"] = new SupporterZone(0, 0, 0, 0);
+      this.supporterZones["B1"] = new SupporterZone(0, 0, 0, 0);
+
+      this.calculateSupporterZones();
+    }
+
+    calculateSupporterZones()
+    {
+      if (this.squareWidthOffset > this.squareHeightOffset)
+      {
+        this.supporterZones["S0"].setSize(this.canvasSquareSize, this.squareHeightOffset);
+        this.supporterZones["S0"].setPosition(this.squareWidthOffset, 0);
+        this.supporterZones["S1"].setSize(this.canvasSquareSize, this.squareHeightOffset);
+        this.supporterZones["S1"].setPosition(this.squareWidthOffset, this.squareHeightOffset+this.canvasSquareSize);
+        this.supporterZones["B0"].setSize(this.squareWidthOffset, this.canvas.height);
+        this.supporterZones["B0"].setPosition(0, 0);
+        this.supporterZones["B1"].setSize(this.squareWidthOffset, this.canvas.height);
+        this.supporterZones["B1"].setPosition(this.squareWidthOffset+this.canvasSquareSize, 0);
+      }
+      else
+      {
+        this.supporterZones["S0"].setSize(this.squareWidthOffset, this.canvasSquareSize);
+        this.supporterZones["S0"].setPosition(0, this.squareHeightOffset);
+        this.supporterZones["S1"].setSize(this.squareWidthOffset, this.canvasSquareSize);
+        this.supporterZones["S1"].setPosition(this.squareWidthOffset+this.canvasSquareSize, this.squareHeightOffset);
+        this.supporterZones["B0"].setSize(this.canvas.width, this.squareHeightOffset);
+        this.supporterZones["B0"].setPosition(0, 0);
+        this.supporterZones["B1"].setSize(this.canvas.width, this.squareHeightOffset);
+        this.supporterZones["B1"].setPosition(0, this.squareHeightOffset+this.canvasSquareSize);
+      }
     }
 
     assetsLoaded()
@@ -910,6 +1021,7 @@ class GameRenderer
         this.canvas.height = this.canvasHeight;
 
         this.layers["standard"].setSize(this.canvasWidth, this.canvasHeight);
+        this.layers["supporters"].setSize(this.canvasWidth, this.canvasHeight);
         this.layers["maze"].setSize(this.canvasSquareSize, this.canvasSquareSize);
         this.layers["maze"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
         this.layers["mazeTexture"].setSize(this.canvasSquareSize, this.canvasSquareSize);
@@ -921,6 +1033,11 @@ class GameRenderer
         this.layers["mazeParticles"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
         this.layers["mazeBackground"].setSize(this.canvasSquareSize, this.canvasSquareSize);
         this.layers["mazeBackground"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
+        if (this.supporterZones["B0"] !== undefined)
+        {
+        console.log('hee')
+        this.calculateSupporterZones();
+        }
       }
     }
     resizeCanvas(context, width, height)
@@ -958,6 +1075,7 @@ class GameRenderer
         this.displayMenu(game);
       }
 
+      this.displaySupporters(game);
       for (let i = 0; i < this.layerOrder.length; i++)
       {
         this.drawLayer(this.layers[this.layerOrder[i]]);
@@ -966,6 +1084,22 @@ class GameRenderer
       window.requestAnimationFrame(function () { this.renderLoop(game); }.bind(game.renderer));
 
       this.renderTick++;
+    }
+
+    displaySupporters(game)
+    {
+      let zone = this.supporterZones["S0"];
+      this.layers["supporters"].ctx.fillStyle = "#FF0000";
+      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      this.layers["supporters"].ctx.fillStyle = "#00FFFF";
+      zone = this.supporterZones["S1"];
+      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      this.layers["supporters"].ctx.fillStyle = "#00FF00";
+      zone = this.supporterZones["B0"];
+      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      this.layers["supporters"].ctx.fillStyle = "#0000FF";
+      zone = this.supporterZones["B1"];
+      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
     }
 
     displayMenu(game)
@@ -1006,7 +1140,7 @@ class GameRenderer
       {
         this.layers["character"].ctx.drawImage(
           this.assets.getAsset("charactersheet").frames[Math.floor(this.animations["character"].currentFrame/8)],
-          2, 2, this.blockWidth-4, this.blockHeight-4);
+          0, 0, this.blockWidth, this.blockHeight);
         this.ctx.drawImage(this.layers["character"].canvas, (playerX*this.blockWidth)+this.squareWidthOffset, (playerY*this.blockHeight)+this.squareHeightOffset, this.blockWidth, this.blockHeight);
       }
       // this.ctx.rect((playerX*this.blockWidth+7)+this.squareWidthOffset, (playerY*this.blockHeight+7)+this.squareHeightOffset, this.blockWidth-14, this.blockHeight-14);
