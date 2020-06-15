@@ -1,5 +1,6 @@
 "use strict";
 
+Pizzicato.volume = 0;
 // directions: [N, E, S, W]
 
 const MAZE_WIDTH = 18;
@@ -15,6 +16,20 @@ const QDY = [0, 0, 1, 1];
 
 //Cosntant to get the opposite of a direction based on its ID
 const OPPOSITE = [2, 3, 0, 1];
+
+//anchor values for relative positioning
+const ANCHORS = [
+  "absolute",
+  "top-left",
+  "left",
+  "bottom-left",
+  "top-right",
+  "right",
+  "bottom-right",
+  "top",
+  "bottom",
+  "center"
+];
 
 const WALL_TILES = [
   "-wall.png",
@@ -54,6 +69,7 @@ class SupporterZone
 
     this.canvas = document.createElement('canvas');
     this.ctx = this.canvas.getContext('2d');
+    this.elements = [];
   }
   setSize(x, y)
   {
@@ -68,9 +84,19 @@ class SupporterZone
     this.xPos = x;
     this.yPos = y;
   }
+  addOverlayElement(element)
+  {
+    this.elements.push(element)
+  }
   drawToContext(ctx, x, y)
   {
-
+    for (let i = 0; i < this.elements.length; i++)
+    {
+      let imagePosition = this.elements[i].positionFromAnchor(this.width, this.height);
+      imagePosition[0] += this.xPos;
+      imagePosition[1] += this.yPos;
+      ctx.drawImage(this.elements[i].getImage(), imagePosition[0], imagePosition[1], this.elements[i].width, this.elements[i].height);
+    }
   }
 }
 
@@ -78,20 +104,29 @@ class SupporterZone
 
 class OverlayElement
 {
-  constructor()
+  constructor(asset)
   {
-    this.xPos;
-    this.yPos;
+    this.xOffset = 0;
+    this.yOffset = 0;
+    this.asset = asset;
     this.width;
     this.height;
-    this.asset;
+    this.anchor = "absolute";
     if (this.asset.frames !== undefined)
     {
       this.animation = new Animation();
       this.animation.startTime = game.renderer.renderTick;
       this.animation.frameCount = this.asset.frames.length;
+      this.width = this.asset.width;
+      this.height = this.asset.height;
+    }
+    else
+    {
+      this.width = this.asset.image.width;
+      this.height = this.asset.image.height;
     }
   }
+
   getImage()
   {
     //assume is an animatedasset
@@ -104,17 +139,96 @@ class OverlayElement
       return this.asset.image;
     }
   }
-}
 
-class SoundPlayer
-{
-  constructor()
+  getAspectRatio()
   {
+    return this.width/this.height;
+  }
 
+  setRelativeSize(canvasWidth, canvasHeight, maximumOfDimension, aspectRatio)
+  {
+    if (aspectRatio === undefined)
+    {
+      let aspectRatio = this.width/this.height;
+    }
+
+    let canvasRatio = canvasWidth/canvasHeight;
+
+    let smallestCanvasAxis;
+
+    if (canvasRatio > 1)
+    {
+      smallestCanvasAxis = canvasWidth;
+    }
+    else
+    {
+      smallestCanvasAxis = canvasHeight;
+    }
+
+    let longestSide = maximumOfDimension*smallestCanvasAxis;
+
+    let newX;
+    let newY;
+
+    if (aspectRatio > 1)
+    {
+      newX = longestSide;
+      newY = longestSide*(1/aspectRatio);
+    }
+    else
+    {
+      newX = longestSide*aspectRatio;
+      newY = longestSide;
+    }
+
+    newX = Math.floor(newX);
+    newY = Math.floor(newY);
+
+    this.width = newX;
+    this.height = newY;
+  }
+
+  positionFromAnchor(width, height)
+  {
+    let position;
+    switch (this.anchor)
+    {
+      case "absolute":
+        position = [this.xOffset, this.yOffset];
+        break;
+      case "top-left":
+        position = [this.xOffset, this.yOffset];
+        break;
+      case "left":
+        position = [this.xOffset, this.yOffset+Math.floor((height/2)-(this.height/2))];
+        break;
+      case "bottom-left":
+        position = [this.xOffset, this.yOffset+Math.floor((height)-(this.height))];
+        break;
+      case "top-right":
+        position = [this.xOffset+Math.floor((width)-(this.width)), this.yOffset];
+        break;
+      case "right":
+        position = [this.xOffset+Math.floor((width)-(this.width)), this.yOffset+Math.floor((height/2)-(this.height/2))];
+        break;
+      case "bottom-right":
+        position = [this.xOffset+Math.floor((width)-(this.width)), this.yOffset+Math.floor((height)-(this.height))];
+        break;
+      case "top":
+        position = [this.xOffset+Math.floor((width/2)-(this.width/2)), this.yOffset];
+        break;
+      case "bottom":
+        position = [this.xOffset+Math.floor((width/2)-(this.width/2)), this.yOffset+Math.floor((height)-(this.height))];
+        break;
+      case "center":
+        position = [this.xOffset+Math.floor((width/2)-(this.width/2)), this.yOffset+Math.floor((height/2)-(this.height/2))];
+        break;
+    }
+    return position;
   }
 }
 
-class Song
+class SoundPlayer
 {
   constructor()
   {
@@ -446,8 +560,8 @@ class Game
     this.currentQuadrantLevels = [-1, -1, -1, -1];
 
     this.gameTime = 0;
-    this.quadrantsVisited = [true, false, false, false];
-    this.quadrantsRegenerated = [false, true, true, true];
+    this.quadrantsVisited = [false, false, false, false];
+    this.quadrantsRegenerated = [true, true, true, true];
     this.currentQuadrant = 0;
     this.renderer = new GameRenderer();
     this.gameLoaded = false;
@@ -486,10 +600,31 @@ class Game
       if (this.renderer.assetsLoaded())
       {
         this.initializeQuadrantData();
+        this.initializeOverlayData();
+        this.startSong();
+        this.randomizePlayerStartPosition();
         this.gameLoaded = true;
         this.state = "game";
       }
     }
+  }
+
+  startSong()
+  {
+    this.renderer.assets.getAsset("song").sound.loop = true;
+    this.renderer.assets.getAsset("song").sound.play();
+  }
+
+  randomizePlayerStartPosition()
+  {
+    this.player.xPos = Math.round(Math.random())*(this.currentMaze.width-1);
+    this.player.yPos = Math.round(Math.random())*(this.currentMaze.height-1);
+  }
+  initializeOverlayData()
+  {
+    let wheel = new OverlayElement(this.renderer.assets.getAsset("colourwheel"));
+    wheel.animation.timeDivider = 4;
+    this.renderer.supporterZones["C0"].addOverlayElement(wheel);
   }
 
   generateNewColourSet()
@@ -807,6 +942,19 @@ class AnimatedAsset
   }
 }
 
+class SoundAsset
+{
+  constructor(url, onload)
+  {
+    this.sound = new Pizzicato.Sound(url, function ()
+    {
+      this.loaded = true;
+      onload();
+    }.bind(this));
+    this.loaded = false;
+  }
+}
+
 //Used to give names to images and sprite animations. Lets you check to see if an
 //asset is fully loaded before use.
 class AssetLibrary
@@ -820,6 +968,13 @@ class AssetLibrary
   addAsset(name, url)
   {
     let asset = new Asset(url, function() { this.assetLoaded(name) }.bind(this));
+    this.assets[name] = asset;
+    this.loadingAssets.push(name);
+  }
+
+  addSoundAsset(name, url)
+  {
+    let asset = new SoundAsset(url, function() { this.assetLoaded(name) }.bind(this));
     this.assets[name] = asset;
     this.loadingAssets.push(name);
   }
@@ -906,6 +1061,7 @@ class GameRenderer
       this.assets.addAnimatedAsset("deadspacechar1", "imgs/deadspace/deadspaceanimation1.png", 256, 248);
 
       this.assets.addAnimatedAsset("charactersheet", "imgs/character/characteranimation.png", 256, 256);
+      this.assets.addAnimatedAsset("colourwheel", "imgs/box.png", 256, 256);
 
       this.activeSheets = {};
 
@@ -935,6 +1091,7 @@ class GameRenderer
       this.assets.addAsset("quad2", "imgs/quads/quad2.png");
       this.assets.addAsset("quad3", "imgs/quads/quad3.png");
 
+      this.assets.addSoundAsset("song", "sounds/coloursongremix.mp3");
 
       this.scaleLayers();
       this.initializeSupporterZones();
@@ -947,6 +1104,8 @@ class GameRenderer
 
       this.supporterZones["B0"] = new SupporterZone(0, 0, 0, 0);
       this.supporterZones["B1"] = new SupporterZone(0, 0, 0, 0);
+
+      this.supporterZones["C0"] = new SupporterZone(0, 0, 0, 0);
 
       this.calculateSupporterZones();
     }
@@ -963,6 +1122,8 @@ class GameRenderer
         this.supporterZones["B0"].setPosition(0, 0);
         this.supporterZones["B1"].setSize(this.squareWidthOffset, this.canvas.height);
         this.supporterZones["B1"].setPosition(this.squareWidthOffset+this.canvasSquareSize, 0);
+
+        this.supporterZones["C0"].setPosition(this.squareWidthOffset-(this.marginMinimum/2), 0);
       }
       else
       {
@@ -974,7 +1135,10 @@ class GameRenderer
         this.supporterZones["B0"].setPosition(0, 0);
         this.supporterZones["B1"].setSize(this.canvas.width, this.squareHeightOffset);
         this.supporterZones["B1"].setPosition(0, this.squareHeightOffset+this.canvasSquareSize);
+
+        this.supporterZones["C0"].setPosition(0, this.squareHeightOffset-(this.marginMinimum/2));
       }
+      this.supporterZones["C0"].setSize(this.canvasSquareSize+(this.marginMinimum), this.canvasSquareSize+(this.marginMinimum));
     }
 
     assetsLoaded()
@@ -1035,7 +1199,6 @@ class GameRenderer
         this.layers["mazeBackground"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
         if (this.supporterZones["B0"] !== undefined)
         {
-        console.log('hee')
         this.calculateSupporterZones();
         }
       }
@@ -1088,18 +1251,24 @@ class GameRenderer
 
     displaySupporters(game)
     {
-      let zone = this.supporterZones["S0"];
-      this.layers["supporters"].ctx.fillStyle = "#FF0000";
-      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      this.layers["supporters"].ctx.fillStyle = "#00FFFF";
-      zone = this.supporterZones["S1"];
-      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      this.layers["supporters"].ctx.fillStyle = "#00FF00";
-      zone = this.supporterZones["B0"];
-      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      this.layers["supporters"].ctx.fillStyle = "#0000FF";
-      zone = this.supporterZones["B1"];
-      this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      // let zone = this.supporterZones["S0"];
+      // this.layers["supporters"].ctx.fillStyle = "#FF0000";
+      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      // this.layers["supporters"].ctx.fillStyle = "#00FFFF";
+      // zone = this.supporterZones["S1"];
+      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      // this.layers["supporters"].ctx.fillStyle = "#00FF00";
+      // zone = this.supporterZones["B0"];
+      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+      // this.layers["supporters"].ctx.fillStyle = "#0000FF";
+      // zone = this.supporterZones["B1"];
+      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
+
+      for (let i = 0; i < Object.keys(this.supporterZones).length; i++)
+      {
+        let zone = this.supporterZones[Object.keys(this.supporterZones)[i]];
+        zone.drawToContext(this.layers["supporters"].ctx, 0, 0);
+      }
     }
 
     displayMenu(game)
@@ -1171,7 +1340,6 @@ class GameRenderer
           let yOffset = QDY[i]*quadrantHeight;
 
           let quadrantBackground = game.quadrants[i].backgroundImage;
-
           this.layers["mazeBackground"].ctx.drawImage(quadrantBackground, xOffset, yOffset, quadrantWidth, quadrantHeight);
         }
 
@@ -1414,8 +1582,6 @@ class MazeGenerator
 
 
 //end class definitions
-
-let ctx;
 
 let globalMaze;
 
