@@ -3,6 +3,8 @@
 Pizzicato.volume = 0;
 // directions: [N, E, S, W]
 
+let overlayElementCount = 0;
+
 const MAZE_WIDTH = 18;
 const MAZE_HEIGHT = 18;
 //constants representing difference in position based on
@@ -16,6 +18,23 @@ const QDY = [0, 0, 1, 1];
 
 //Cosntant to get the opposite of a direction based on its ID
 const OPPOSITE = [2, 3, 0, 1];
+
+const SUPPORTER_IDS = [
+  "supporter1",
+  "supporter2",
+  "supporter3",
+  "supporter4",
+  "supporter5",
+  "supporter6",
+  "supporter7"
+];
+
+const DEADSPACE_IDS = [
+  "deadspace1",
+  "deadspace2",
+  "deadspace3",
+  "deadspace4"
+];
 
 //anchor values for relative positioning
 const ANCHORS = [
@@ -88,14 +107,24 @@ class SupporterZone
   {
     this.elements.push(element)
   }
+  removeOverlayElement(element)
+  {
+    console.log(element);
+    for (let i = 0; i < this.elements.length; i++)
+    {
+      if (this.elements[i].id === element.id)
+      {
+        this.elements.splice(i, 1);
+        break;
+      }
+    }
+  }
   drawToContext(ctx, x, y)
   {
     for (let i = 0; i < this.elements.length; i++)
     {
       let imagePosition = this.elements[i].positionFromAnchor(this.width, this.height);
-      imagePosition[0] += this.xPos;
-      imagePosition[1] += this.yPos;
-      ctx.drawImage(this.elements[i].getImage(), imagePosition[0], imagePosition[1], this.elements[i].width, this.elements[i].height);
+      ctx.drawImage(this.elements[i].getImage(), imagePosition[0]+this.xPos, imagePosition[1]+this.yPos, this.elements[i].width, this.elements[i].height);
     }
   }
 }
@@ -112,6 +141,22 @@ class OverlayElement
     this.width;
     this.height;
     this.anchor = "absolute";
+
+    this.id = overlayElementCount;
+    overlayElementCount++;
+
+    this.cachedPosition = [0, 0];
+
+    this.lastUsedCanvasWidth = null;
+    this.lastUsedCanvasHeight = null;
+    this.lastUsedAnchor = null;
+    this.lastXOffset = null;
+    this.lastYOffset = null;
+    this.positionCached = false;
+
+    this.tint = null;
+    this.tintedFrames = [];
+
     if (this.asset.frames !== undefined)
     {
       this.animation = new Animation();
@@ -125,6 +170,36 @@ class OverlayElement
       this.width = this.asset.image.width;
       this.height = this.asset.image.height;
     }
+  }
+
+  setTint(tint)
+  {
+    this.tint = tint;
+    if (this.asset.frames !== undefined)
+    {
+      let frames = this.asset.frames;
+
+      let frameWidth = frames[0].width;
+      let frameHeight = frames[0].height;
+
+      for (let i = 0; i < frames.length; i++)
+      {
+
+      }
+    }
+  }
+
+  setOffset(x, y)
+  {
+    this.xOffset = x;
+    this.yOffset = y;
+    this.positionCached = false;
+  }
+
+  setAnchor(anchor)
+  {
+    this.anchor = anchor;
+    this.positionCached = false;
   }
 
   getImage()
@@ -191,6 +266,14 @@ class OverlayElement
   positionFromAnchor(width, height)
   {
     let position;
+    if (this.lastUsedCanvasWidth === width && this.lastUsedCanvasHeight === height && this.positionCached)
+    {
+      return this.cachedPosition;
+    }
+    else
+    {
+      this.positionCached = false;
+    }
     switch (this.anchor)
     {
       case "absolute":
@@ -224,6 +307,12 @@ class OverlayElement
         position = [this.xOffset+Math.floor((width/2)-(this.width/2)), this.yOffset+Math.floor((height/2)-(this.height/2))];
         break;
     }
+
+    this.positionCached = true;
+    this.cachedPosition = position;
+    this.lastUsedCanvasWidth = width;
+    this.lastUsedCanvasHeight = height;
+    this.lastUsedAnchor = this.anchor;
     return position;
   }
 }
@@ -554,6 +643,7 @@ class Game
 
     //primary colours for quadrants, full sets in this.quadrants
     this.quadrantColourSets = []
+    this.cornerSupporters = [null, null, null, null];
     this.generateNewColourSet();
 
     //ids for using from quadrantColourSets
@@ -561,8 +651,9 @@ class Game
 
     this.gameTime = 0;
     this.quadrantsVisited = [false, false, false, false];
+    this.quadrantsLeft = [false, false, false, false];
     this.quadrantsRegenerated = [true, true, true, true];
-    this.currentQuadrant = 0;
+    this.currentQuadrant = null;
     this.renderer = new GameRenderer();
     this.gameLoaded = false;
 
@@ -580,6 +671,16 @@ class Game
       this.player.updateMovement(this.currentMaze);
       if (this.currentMaze.getPositionQuadrant(this.player.xPos, this.player.yPos) !== this.currentQuadrant)
       {
+
+        if (this.currentQuadrant !== null)
+        {
+          if (!this.quadrantsLeft[this.currentQuadrant])
+          {
+            console.log(`make supporter ${this.currentQuadrant}`);
+            this.createNewSupporter(this.currentQuadrant);
+            this.quadrantsLeft[this.currentQuadrant] = true;
+          }
+        }
         this.currentQuadrant = this.currentMaze.getPositionQuadrant(this.player.xPos, this.player.yPos);
         this.quadrantsVisited[this.currentQuadrant] = true;
         this.quadrantsRegenerated[this.currentQuadrant] = false;
@@ -589,6 +690,7 @@ class Game
           this.generator.quadrants[oppositeQuadrant] = this.generator.generateQuadrant(oppositeQuadrant);
           this.currentMaze.grid = this.generator.stitchQuadrants(this.generator.quadrants);
           this.quadrantsRegenerated[oppositeQuadrant] = true;
+          this.quadrantsLeft[oppositeQuadrant] = false;
           this.quadrantsVisited[oppositeQuadrant] = false;
           this.replaceQuadrantData(oppositeQuadrant);
         }
@@ -620,11 +722,53 @@ class Game
     this.player.xPos = Math.round(Math.random())*(this.currentMaze.width-1);
     this.player.yPos = Math.round(Math.random())*(this.currentMaze.height-1);
   }
+
+  createNewSupporter(quadrant)
+  {
+    let supporterID = SUPPORTER_IDS[Math.floor(Math.random()*SUPPORTER_IDS.length)];
+
+    let zone;
+    let anchor;
+
+    switch(quadrant)
+    {
+      case 0:
+        zone = "B0";
+        anchor = "top-left";
+        break;
+      case 1:
+        zone = "B1";
+        anchor = "top-right";
+        break;
+      case 2:
+        zone = "B1";
+        anchor = "bottom-right";
+        break;
+      case 3:
+        zone = "B0";
+        anchor = "bottom-left";
+        break;
+      default:
+        console.log("INVALID QUADRANT");
+    }
+    let supporter = new OverlayElement(this.renderer.assets.getAsset(supporterID));
+    supporter.animation.timeDivider = 4;
+    supporter.anchor = anchor;
+
+    if (this.cornerSupporters[quadrant] !== null)
+    {
+      this.renderer.supporterZones[zone].removeOverlayElement(this.cornerSupporters[quadrant]);
+    }
+
+    this.renderer.supporterZones[zone].addOverlayElement(supporter);
+    this.cornerSupporters[quadrant] = supporter;
+  }
+
   initializeOverlayData()
   {
-    let wheel = new OverlayElement(this.renderer.assets.getAsset("colourwheel"));
-    wheel.animation.timeDivider = 4;
-    this.renderer.supporterZones["C0"].addOverlayElement(wheel);
+    // let wheel = new OverlayElement(this.renderer.assets.getAsset("supporter6"));
+    // wheel.animation.timeDivider = 4;
+    // this.renderer.supporterZones["B0"].addOverlayElement(wheel);
   }
 
   generateNewColourSet()
@@ -633,7 +777,7 @@ class Game
     let baseHue = Math.floor(Math.random()*360);
     let hueDeviance = Math.floor(Math.random()*10)+70;
 
-    let baseSaturation = 100;
+    let baseSaturation = 60;
     let baseLuminance = 50;
 
     let baseColour = new Colour(baseHue, baseSaturation, baseLuminance);
@@ -649,8 +793,8 @@ class Game
   {
     let set = [];
     set.push(colour);
-    set.push(new Colour((colour.h+120)%360, colour.s, colour.l));
-    set.push(new Colour((colour.h+240)%360, colour.s, colour.l));
+    set.push(new Colour((colour.h+120)%360, 100, 60));
+    set.push(new Colour((colour.h+240)%360, 100, 60));
     return set;
   }
 
@@ -748,8 +892,8 @@ class Quadrant
 {
   constructor()
   {
-    let colours = [];
-    let backgroundImage = null;
+    this.colours = [];
+    this.backgroundImage = null;
   }
   cacheBackgroundFromAsset(asset)
   {
@@ -946,12 +1090,12 @@ class SoundAsset
 {
   constructor(url, onload)
   {
+    this.loaded = false;
     this.sound = new Pizzicato.Sound(url, function ()
     {
       this.loaded = true;
       onload();
     }.bind(this));
-    this.loaded = false;
   }
 }
 
@@ -1050,18 +1194,12 @@ class GameRenderer
       this.addLayer("supporters", 0, 0,
       window.innerWidth, window.innerHeight);
 
-      this.layerOrder = ["standard", "mazeParticles", "supporters"];
+      this.layerOrder = ["standard", "mazeBackground", "mazeTexture", "deadSpace", "mazeParticles", "character", "supporters"];
 
       this.assets = new AssetLibrary();
-      this.assets.addAsset("background", "imgs/background.jpg");
 
       let deadspaceAnimation = new Animation();
       deadspaceAnimation.frameCount = 44;
-
-      this.assets.addAnimatedAsset("deadspacechar1", "imgs/deadspace/deadspaceanimation1.png", 256, 248);
-
-      this.assets.addAnimatedAsset("charactersheet", "imgs/character/characteranimation.png", 256, 256);
-      this.assets.addAnimatedAsset("colourwheel", "imgs/box.png", 256, 256);
 
       this.activeSheets = {};
 
@@ -1076,12 +1214,37 @@ class GameRenderer
       this.addAnimation("character", characterAnimation);
       this.addAnimation("deadspace", deadspaceAnimation);
 
+      this.loadAssets();
+
+      this.scaleLayers();
+      this.initializeSupporterZones();
+    }
+
+    loadAssets()
+    {
       for (let i = 0; i < WALL_TILES.length; i++)
       {
         let tileName = WALL_TILES[i];
         let tileSrc = `imgs/tiles/${tileName}`;
         this.assets.addAsset(tileName, tileSrc);
       }
+
+      this.assets.addAsset("background", "imgs/background.jpg");
+
+      this.assets.addAnimatedAsset("deadspace1", "imgs/deadspace/deadspace1.png", 256, 248);
+      this.assets.addAnimatedAsset("deadspace2", "imgs/deadspace/deadspace2.png", 256, 256);
+      this.assets.addAnimatedAsset("deadspace3", "imgs/deadspace/deadspace3.png", 256, 256);
+      this.assets.addAnimatedAsset("deadspace4", "imgs/deadspace/deadspace4.png", 256, 256);
+
+      this.assets.addAnimatedAsset("charactersheet", "imgs/character/characteranimation.png", 256, 256);
+
+      this.assets.addAnimatedAsset("supporter1", "imgs/supporter1.png", 201, 182);
+      this.assets.addAnimatedAsset("supporter2", "imgs/supporter2.png", 256, 254);
+      this.assets.addAnimatedAsset("supporter3", "imgs/supporter3.png", 221, 256);
+      this.assets.addAnimatedAsset("supporter4", "imgs/supporter4.png", 256, 256);
+      this.assets.addAnimatedAsset("supporter5", "imgs/supporter5.png", 234, 196);
+      this.assets.addAnimatedAsset("supporter6", "imgs/supporter6.png", 256, 256);
+      this.assets.addAnimatedAsset("supporter7", "imgs/supporter7.png", 256, 256);
 
       this.assets.addAsset("character", "imgs/character/character.png");
       this.assets.addAsset("quadrantbackground", "imgs/quadrantbackground.png");
@@ -1091,14 +1254,13 @@ class GameRenderer
       this.assets.addAsset("quad2", "imgs/quads/quad2.png");
       this.assets.addAsset("quad3", "imgs/quads/quad3.png");
 
-      this.assets.addSoundAsset("song", "sounds/coloursongremix.mp3");
-
-      this.scaleLayers();
-      this.initializeSupporterZones();
+      this.assets.addSoundAsset("song", "sounds/coloursong.mp3");
     }
 
     initializeSupporterZones()
     {
+
+      //S - small B - big C - center G - global
       this.supporterZones["S0"] = new SupporterZone(0, 0, 0, 0);
       this.supporterZones["S1"] = new SupporterZone(0, 0, 0, 0);
 
@@ -1106,6 +1268,8 @@ class GameRenderer
       this.supporterZones["B1"] = new SupporterZone(0, 0, 0, 0);
 
       this.supporterZones["C0"] = new SupporterZone(0, 0, 0, 0);
+
+      this.supporterZones["G0"] = new SupporterZone(0, 0, 0, 0);
 
       this.calculateSupporterZones();
     }
@@ -1139,6 +1303,9 @@ class GameRenderer
         this.supporterZones["C0"].setPosition(0, this.squareHeightOffset-(this.marginMinimum/2));
       }
       this.supporterZones["C0"].setSize(this.canvasSquareSize+(this.marginMinimum), this.canvasSquareSize+(this.marginMinimum));
+
+      this.supporterZones["G0"].setSize(this.canvasWidth, this.canvasHeight);
+      this.supporterZones["G0"].setPosition(0, 0);
     }
 
     assetsLoaded()
@@ -1190,7 +1357,7 @@ class GameRenderer
         this.layers["maze"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
         this.layers["mazeTexture"].setSize(this.canvasSquareSize, this.canvasSquareSize);
         this.layers["mazeTexture"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
-        this.layers["character"].setSize(this.blockWidth, this.blockHeight);
+        this.layers["character"].setSize(this.canvasWidth, this.canvasHeight);
         this.layers["deadSpace"].setSize(this.canvasSquareSize, this.canvasSquareSize);
         this.layers["deadSpace"].setPosition(this.squareWidthOffset, this.squareHeightOffset);
         this.layers["mazeParticles"].setSize(this.canvasSquareSize, this.canvasSquareSize);
@@ -1278,12 +1445,12 @@ class GameRenderer
 
     displayDeadspace(game)
     {
-      if (this.assets.getAsset("deadspacechar1").frames.length > 0)
+      if (this.assets.getAsset("deadspace1").frames.length > 0)
       {
-        let frame = this.assets.getAsset("deadspacechar1").frames[Math.floor(this.animations["deadspace"].getCurrentFrame(this.renderTick)/4)];
-        this.layers["deadSpace"].ctx.drawImage(frame, 0, 0, frame.width, frame.height);
-        this.ctx.drawImage(frame, this.squareWidthOffset+((game.currentMaze.width/2)*this.blockWidth)-((game.currentMaze.deadSize/2)*this.blockWidth),
-        this.squareHeightOffset+((game.currentMaze.width/2)*this.blockHeight)-((game.currentMaze.deadSize/2)*this.blockHeight),
+        let frame = this.assets.getAsset("deadspace1").frames[Math.floor(this.animations["deadspace"].getCurrentFrame(this.renderTick)/4)];
+        //this.layers["deadSpace"].ctx.drawImage(frame, 0, 0, frame.width, frame.height);
+        this.layers["deadSpace"].ctx.drawImage(frame, ((game.currentMaze.width/2)*this.blockWidth)-((game.currentMaze.deadSize/2)*this.blockWidth),
+        ((game.currentMaze.width/2)*this.blockHeight)-((game.currentMaze.deadSize/2)*this.blockHeight),
          (game.currentMaze.deadSize*this.blockWidth)/1, (game.currentMaze.deadSize*this.blockHeight)/1);
       }
     }
@@ -1295,7 +1462,6 @@ class GameRenderer
       game.player.playerTrail.displayTrail(this.layers["mazeParticles"]);
 
       //display character
-      this.ctx.beginPath();
       this.layers["character"].ctx.clearRect(0, 0, this.blockWidth, this.blockHeight);
       let playerX = game.player.xPos;
       let playerY = game.player.yPos;
@@ -1307,16 +1473,17 @@ class GameRenderer
       }
       if (this.assets.loadingAssets.length === 0)
       {
-        this.layers["character"].ctx.drawImage(
+        let characterCanvas = document.createElement("canvas");
+        characterCanvas.width = this.blockWidth;
+        characterCanvas.height = this.blockHeight;
+        let c_ctx = characterCanvas.getContext('2d');
+
+        c_ctx.drawImage(
           this.assets.getAsset("charactersheet").frames[Math.floor(this.animations["character"].currentFrame/8)],
           0, 0, this.blockWidth, this.blockHeight);
-        this.ctx.drawImage(this.layers["character"].canvas, (playerX*this.blockWidth)+this.squareWidthOffset, (playerY*this.blockHeight)+this.squareHeightOffset, this.blockWidth, this.blockHeight);
+
+        this.layers["character"].ctx.drawImage(characterCanvas, (playerX*this.blockWidth)+this.squareWidthOffset, (playerY*this.blockHeight)+this.squareHeightOffset, this.blockWidth, this.blockHeight);
       }
-      // this.ctx.rect((playerX*this.blockWidth+7)+this.squareWidthOffset, (playerY*this.blockHeight+7)+this.squareHeightOffset, this.blockWidth-14, this.blockHeight-14);
-      //
-      // this.ctx.fillStyle = "red";
-      //
-      // this.ctx.fill();
     }
 
     displayMaze(maze, game)
@@ -1343,7 +1510,7 @@ class GameRenderer
           this.layers["mazeBackground"].ctx.drawImage(quadrantBackground, xOffset, yOffset, quadrantWidth, quadrantHeight);
         }
 
-        this.ctx.drawImage(this.layers["mazeBackground"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
+        //this.ctx.drawImage(this.layers["mazeBackground"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
 
         for (let x = 0; x < maze.width; x++)
         {
@@ -1367,15 +1534,27 @@ class GameRenderer
         this.layers["mazeTexture"].ctx.drawImage(this.layers["maze"].canvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
         this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-in";
 
+        let quadrantSize = this.canvasSquareSize/2;
+        let gradient;
 
-        let gradient = this.layers["mazeTexture"].ctx.createLinearGradient(0, 0, this.canvasSquareSize, this.canvasSquareSize);
-        gradient.addColorStop(0, "green");
-        gradient.addColorStop(1, "blue");
-        this.layers["mazeTexture"].ctx.fillStyle = gradient;
-        this.layers["mazeTexture"].ctx.fillRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
+        let gradientCanvas = document.createElement("canvas");
+        gradientCanvas.width = this.canvasSquareSize;
+        gradientCanvas.height = this.canvasSquareSize;
+        let g_ctx = gradientCanvas.getContext('2d');
 
+        for (let i = 0; i <= 3; i++)
+        {
+          gradient = this.layers["mazeTexture"].ctx.createLinearGradient(quadrantSize, quadrantSize,
+            this.canvasSquareSize*QDX[i], this.canvasSquareSize*QDY[i]);
+          gradient.addColorStop(0, game.quadrants[i].colours[1].string);
+          gradient.addColorStop(1, game.quadrants[i].colours[2].string);
+          g_ctx.fillStyle = gradient;
+          g_ctx.fillRect(quadrantSize*QDX[i], quadrantSize*QDY[i], quadrantSize, quadrantSize);
+        }
+
+        this.layers["mazeTexture"].ctx.drawImage(gradientCanvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
         this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-over";
-        this.ctx.drawImage(this.layers["mazeTexture"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
+        //this.ctx.drawImage(this.layers["mazeTexture"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
       }
 
     }
@@ -1390,7 +1569,7 @@ class GameRenderer
     drawWall(x1, y1, x2, y2)
     {
       let wallThickness = 8;
-      this.layers["maze"].ctx.strokeStyle = "#00000077";
+      this.layers["maze"].ctx.strokeStyle = "#000000AA";
       this.layers["maze"].ctx.lineWidth = 10;
       this.layers["maze"].ctx.beginPath();
       this.layers["maze"].ctx.moveTo(x1, y1);
