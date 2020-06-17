@@ -109,7 +109,6 @@ class SupporterZone
   }
   removeOverlayElement(element)
   {
-    console.log(element);
     for (let i = 0; i < this.elements.length; i++)
     {
       if (this.elements[i].id === element.id)
@@ -175,6 +174,8 @@ class OverlayElement
   setTint(tint)
   {
     this.tint = tint;
+    this.tintedFrames = [];
+
     if (this.asset.frames !== undefined)
     {
       let frames = this.asset.frames;
@@ -182,9 +183,29 @@ class OverlayElement
       let frameWidth = frames[0].width;
       let frameHeight = frames[0].height;
 
+      let tintCanvas = document.createElement('canvas');
+      tintCanvas.width = frameWidth;
+      tintCanvas.height = frameHeight;
+
+      let t_ctx = tintCanvas.getContext('2d');
+      t_ctx.fillStyle = tint;
+      t_ctx.fillRect(0, 0, frameWidth, frameHeight);
+
+
       for (let i = 0; i < frames.length; i++)
       {
+        let tintedFrame = document.createElement('canvas');
 
+        tintedFrame.width = frameWidth;
+        tintedFrame.height = frameHeight;
+
+        let f_ctx = tintedFrame.getContext('2d');
+
+        f_ctx.drawImage(frames[i], 0, 0, frameWidth, frameHeight);
+        f_ctx.globalCompositeOperation = "color";
+        f_ctx.drawImage(tintCanvas, 0, 0, frameWidth, frameHeight);
+
+        this.tintedFrames.push(tintedFrame);
       }
     }
   }
@@ -207,7 +228,14 @@ class OverlayElement
     //assume is an animatedasset
     if (this.animation !== undefined)
     {
-      return this.asset.frames[this.animation.getCurrentFrame(game.renderer.renderTick)];
+      if (this.tintedFrames.length > 0)
+      {
+        return this.tintedFrames[this.animation.getCurrentFrame(game.renderer.renderTick)];
+      }
+      else
+      {
+        return this.asset.frames[this.animation.getCurrentFrame(game.renderer.renderTick)];
+      }
     }
     else
     {
@@ -233,11 +261,11 @@ class OverlayElement
 
     if (canvasRatio > 1)
     {
-      smallestCanvasAxis = canvasWidth;
+      smallestCanvasAxis = canvasHeight;
     }
     else
     {
-      smallestCanvasAxis = canvasHeight;
+      smallestCanvasAxis = canvasWidth;
     }
 
     let longestSide = maximumOfDimension*smallestCanvasAxis;
@@ -649,6 +677,8 @@ class Game
     //ids for using from quadrantColourSets
     this.currentQuadrantLevels = [-1, -1, -1, -1];
 
+    this.mazeLevel = 0;
+
     this.gameTime = 0;
     this.quadrantsVisited = [false, false, false, false];
     this.quadrantsLeft = [false, false, false, false];
@@ -676,7 +706,6 @@ class Game
         {
           if (!this.quadrantsLeft[this.currentQuadrant])
           {
-            console.log(`make supporter ${this.currentQuadrant}`);
             this.createNewSupporter(this.currentQuadrant);
             this.quadrantsLeft[this.currentQuadrant] = true;
           }
@@ -685,6 +714,7 @@ class Game
         this.quadrantsVisited[this.currentQuadrant] = true;
         this.quadrantsRegenerated[this.currentQuadrant] = false;
         let oppositeQuadrant = (this.currentQuadrant+2)%4;
+
         if (!this.quadrantsRegenerated[oppositeQuadrant])
         {
           this.generator.quadrants[oppositeQuadrant] = this.generator.generateQuadrant(oppositeQuadrant);
@@ -693,7 +723,22 @@ class Game
           this.quadrantsLeft[oppositeQuadrant] = false;
           this.quadrantsVisited[oppositeQuadrant] = false;
           this.replaceQuadrantData(oppositeQuadrant);
+
+          //change total maze level to lowest quadrant level, and set deadspace to a random
+          //new value
+
+          //note: the ellipses here is the "spread" operator, which turns an array
+          //into separate arguments for functions like Math.min, which expect multiple
+          //arguments rather than an array.
+
+          if (Math.min(...this.currentQuadrantLevels) > this.mazeLevel)
+          {
+            this.mazeLevel = Math.min(...this.currentQuadrantLevels);
+            this.renderer.setDeadspace(this.renderer.assets.getAsset(DEADSPACE_IDS[Math.floor(Math.random()*DEADSPACE_IDS.length)]));
+          }
+
         }
+
       }
       this.gameTime++;
     }
@@ -706,6 +751,7 @@ class Game
         this.startSong();
         this.randomizePlayerStartPosition();
         this.gameLoaded = true;
+        this.renderer.setDeadspace(this.renderer.assets.getAsset(DEADSPACE_IDS[Math.floor(Math.random()*DEADSPACE_IDS.length)]));
         this.state = "game";
       }
     }
@@ -730,30 +776,60 @@ class Game
     let zone;
     let anchor;
 
-    switch(quadrant)
+    if (this.renderer.canvasWidth >= this.renderer.canvasHeight)
     {
-      case 0:
-        zone = "B0";
-        anchor = "top-left";
-        break;
-      case 1:
-        zone = "B1";
-        anchor = "top-right";
-        break;
-      case 2:
-        zone = "B1";
-        anchor = "bottom-right";
-        break;
-      case 3:
-        zone = "B0";
-        anchor = "bottom-left";
-        break;
-      default:
-        console.log("INVALID QUADRANT");
+      switch(quadrant)
+      {
+        case 0:
+          zone = "B0";
+          anchor = "top-left";
+          break;
+        case 1:
+          zone = "B1";
+          anchor = "top-right";
+          break;
+        case 2:
+          zone = "B1";
+          anchor = "bottom-right";
+          break;
+        case 3:
+          zone = "B0";
+          anchor = "bottom-left";
+          break;
+        default:
+          console.log("INVALID QUADRANT");
+      }
     }
+    else
+    {
+      switch(quadrant)
+      {
+        case 0:
+          zone = "B0";
+          anchor = "top-left";
+          break;
+        case 1:
+          zone = "B0";
+          anchor = "top-right";
+          break;
+        case 2:
+          zone = "B1";
+          anchor = "bottom-right";
+          break;
+        case 3:
+          zone = "B1";
+          anchor = "bottom-left";
+          break;
+        default:
+          console.log("INVALID QUADRANT");
+      }
+    }
+
     let supporter = new OverlayElement(this.renderer.assets.getAsset(supporterID));
+    supporter.setTint(this.quadrants[quadrant].colours[0].string);
     supporter.animation.timeDivider = 4;
     supporter.anchor = anchor;
+    supporter.setRelativeSize(this.renderer.supporterZones[zone].width, this.renderer.supporterZones[zone].height, 0.8, supporter.width/supporter.height);
 
     if (this.cornerSupporters[quadrant] !== null)
     {
@@ -1198,9 +1274,6 @@ class GameRenderer
 
       this.assets = new AssetLibrary();
 
-      let deadspaceAnimation = new Animation();
-      deadspaceAnimation.frameCount = 44;
-
       this.activeSheets = {};
 
       this.sheetsLoaded = false;
@@ -1211,8 +1284,11 @@ class GameRenderer
 
       let characterAnimation = new Animation();
       characterAnimation.frameCount = 296;
+      let deadspaceAnimation = new Animation();
+
+      this.deadspace = null;
+
       this.addAnimation("character", characterAnimation);
-      this.addAnimation("deadspace", deadspaceAnimation);
 
       this.loadAssets();
 
@@ -1306,6 +1382,12 @@ class GameRenderer
 
       this.supporterZones["G0"].setSize(this.canvasWidth, this.canvasHeight);
       this.supporterZones["G0"].setPosition(0, 0);
+    }
+
+    setDeadspace(id)
+    {
+      this.deadspace = new OverlayElement(id);
+      this.deadspace.animation.timeDivider = 4;
     }
 
     assetsLoaded()
@@ -1447,7 +1529,7 @@ class GameRenderer
     {
       if (this.assets.getAsset("deadspace1").frames.length > 0)
       {
-        let frame = this.assets.getAsset("deadspace1").frames[Math.floor(this.animations["deadspace"].getCurrentFrame(this.renderTick)/4)];
+        let frame = this.deadspace.getImage();
         //this.layers["deadSpace"].ctx.drawImage(frame, 0, 0, frame.width, frame.height);
         this.layers["deadSpace"].ctx.drawImage(frame, ((game.currentMaze.width/2)*this.blockWidth)-((game.currentMaze.deadSize/2)*this.blockWidth),
         ((game.currentMaze.width/2)*this.blockHeight)-((game.currentMaze.deadSize/2)*this.blockHeight),
