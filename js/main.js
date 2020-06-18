@@ -1,6 +1,6 @@
 "use strict";
 
-Pizzicato.volume = 0;
+Pizzicato.volume = 1;
 // directions: [N, E, S, W]
 
 let overlayElementCount = 0;
@@ -183,17 +183,20 @@ class OverlayElement
       let frameWidth = frames[0].width;
       let frameHeight = frames[0].height;
 
-      let tintCanvas = document.createElement('canvas');
-      tintCanvas.width = frameWidth;
-      tintCanvas.height = frameHeight;
-
-      let t_ctx = tintCanvas.getContext('2d');
-      t_ctx.fillStyle = tint;
-      t_ctx.fillRect(0, 0, frameWidth, frameHeight);
-
-
       for (let i = 0; i < frames.length; i++)
       {
+        let tintCanvas = document.createElement('canvas');
+        tintCanvas.width = frameWidth;
+        tintCanvas.height = frameHeight;
+
+        let t_ctx = tintCanvas.getContext('2d');
+        t_ctx.fillStyle = tint;
+        t_ctx.fillRect(0, 0, frameWidth, frameHeight);
+
+        t_ctx.globalCompositeOperation = "destination-in";
+
+        t_ctx.drawImage(frames[i], 0, 0, frameWidth, frameHeight);
+
         let tintedFrame = document.createElement('canvas');
 
         tintedFrame.width = frameWidth;
@@ -661,7 +664,7 @@ class Game
 {
   constructor()
   {
-    this.state = "menu";
+    this.state = "preload";
 
     this.generator = undefined;
     this.player = new Player();
@@ -755,6 +758,15 @@ class Game
         this.state = "game";
       }
     }
+    else if (this.state === "preload")
+    {
+      if (this.renderer.assetsPreloaded())
+      {
+        this.state = "menu";
+        this.renderer.createLoadingElement();
+        this.renderer.loadAssets();
+      }
+    }
   }
 
   startSong()
@@ -775,6 +787,8 @@ class Game
 
     let zone;
     let anchor;
+    let baseOffset = 60;
+    let yOffset = null;
 
     if (this.renderer.canvasWidth >= this.renderer.canvasHeight)
     {
@@ -782,19 +796,23 @@ class Game
       {
         case 0:
           zone = "B0";
-          anchor = "top-left";
+          anchor = "top-right";
+          yOffset = baseOffset;
           break;
         case 1:
           zone = "B1";
-          anchor = "top-right";
+          anchor = "top-left";
+          yOffset = baseOffset;
           break;
         case 2:
           zone = "B1";
-          anchor = "bottom-right";
+          anchor = "bottom-left";
+          yOffset = -baseOffset;
           break;
         case 3:
           zone = "B0";
-          anchor = "bottom-left";
+          anchor = "bottom-right";
+          yOffset = -baseOffset;
           break;
         default:
           console.log("INVALID QUADRANT");
@@ -826,10 +844,15 @@ class Game
     }
 
     let supporter = new OverlayElement(this.renderer.assets.getAsset(supporterID));
-    supporter.setTint(this.quadrants[quadrant].colours[0].string);
+    if (Math.random() < 0.7)
+    {
+      supporter.setTint(this.quadrants[quadrant].colours[0].string);
+    }
+
     supporter.animation.timeDivider = 4;
     supporter.anchor = anchor;
     supporter.setRelativeSize(this.renderer.supporterZones[zone].width, this.renderer.supporterZones[zone].height, 0.8, supporter.width/supporter.height);
+    supporter.setOffset(0, yOffset);
 
     if (this.cornerSupporters[quadrant] !== null)
     {
@@ -1272,6 +1295,9 @@ class GameRenderer
 
       this.layerOrder = ["standard", "mazeBackground", "mazeTexture", "deadSpace", "mazeParticles", "character", "supporters"];
 
+      this.preloadedAssets = new AssetLibrary();
+      this.loadingElement = null;
+
       this.assets = new AssetLibrary();
 
       this.activeSheets = {};
@@ -1290,10 +1316,21 @@ class GameRenderer
 
       this.addAnimation("character", characterAnimation);
 
-      this.loadAssets();
+      this.preloadAssets();
 
       this.scaleLayers();
       this.initializeSupporterZones();
+    }
+
+    preloadAssets()
+    {
+      this.preloadedAssets.addAnimatedAsset("loadingAnimation", "imgs/loadingAnimation.png", 247, 256);
+    }
+
+    createLoadingElement()
+    {
+      this.loadingElement = new OverlayElement(this.preloadedAssets.getAsset("loadingAnimation"));
+      this.loadingElement.animation.timeDivider = 4;
     }
 
     loadAssets()
@@ -1390,9 +1427,15 @@ class GameRenderer
       this.deadspace.animation.timeDivider = 4;
     }
 
+    assetsPreloaded()
+    {
+      console.log(this.preloadedAssets.loadingAssets.length)
+      return (this.preloadedAssets.loadingAssets.length === 0);
+    }
+
     assetsLoaded()
     {
-      return this.assets.loadingAssets.length === 0;
+      return (this.assets.loadingAssets.length === 0) && (this.preloadedAssets.loadingAssets.length === 0);
     }
 
     addLayer(name, xPos, yPos, xSize, ySize)
@@ -1522,7 +1565,8 @@ class GameRenderer
 
     displayMenu(game)
     {
-
+      let imageSize = Math.min(this.canvasWidth, this.canvasHeight)-50;
+      this.ctx.drawImage(this.loadingElement.getImage(), (this.canvasWidth/2)-(imageSize/2), (this.canvasHeight/2)-(imageSize/2), imageSize, imageSize);
     }
 
     displayDeadspace(game)
