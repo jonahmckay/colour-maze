@@ -70,7 +70,25 @@ const WALL_TILES = [
 ];
 
 const WISDOM_LEVEL_THRESHOLD = 1;
-const WISDOMS = ["if a ball is too big for your mouth, it's not yours"];
+const WISDOMS = ["Peredur rode on towards a river valley whose edges were forested,\nwith level meadows on both sides of the river; \non one bank there was a flock of white sheep,\nand on the other a flock of black sheep.\nWhen a white sheep bleated a black sheep would cross the river and turn white,\nand when a black sheep bleated a white sheep\nwould cross the river and turn black.\nOn the bank of the river he saw a tall tree: from the roots to crown on half was aflame and the other green with leaves.",
+
+"Peredur himself set out the next morning, crossing a long stretch of desert without finding a single dwelling until at last he came to a poor small house, and there he heard how there was lying on a gold ring a serpent which had not left standing a dwelling for seven miles round.",
+
+"That’s all the good you get from transmutations.\nThat slippery science stripped me down so bare\nThat I’m worth nothing, here or anywhere.\nAdded to that I am so deep in debt\nFrom borrowing money, you can lay a bet\nLong as I live I’ll never pay it, never!",
+
+"The cat who lived in the palace has been awarded the head-dress of nobility.",
+
+"It was a clear, moonlit night a little after the tenth of the Eighth Month. Her Majesty, who was residing in the Empress’s Office, sat by the edge of the veranda while Ukon no Naishi played the flute for her. The other ladies in attendance sat together, talking and laughing; but I stayed by myself, leaning against one of the pillars between the main hall and the veranda.\n‘Why so silent? said Her Majesty. ‘Say something. It is sad when you do not speak.’\nI am gazing into the autumn moon,’ I replied.\n‘Ah yes’ she remarked. ‘that is just what you should have said.’",
+
+"Wind Instruments\nI love the sound of the flute: it is beautiful when one hears it gradually approaching from the distance, and also when it is played near by and then moves far away until it becomes very faint.\n\nThere is nothing so charming as a man who always carries a flute when he goes out on horseback or on foot. Though he keeps the flute tucked in his robe and one cannot actually see it, one enjoys knowing it is there.",
+
+"Things that should be large.\nPriests.\nFruit.\nHouses.\nProvision Bags.\nInksticks for inkstones.\nRound Braziers.\nWinter Cherries.\nPine Trees.\nThe petals of yellow roses. \nHorses as well as oxen should be large.",
+
+"Things that should be Short.\nA piece of thread when one wants to sew something in a hurry.\nA lamp stand.",
+
+"One has carefully scented a robe and then forgotten about it for several days. When finally one comes to wear it. the aroma is seen more delicious than on freshly scented clothes."];
+
+const WISDOM_TITLES = ["#011", "#0.5", "#01", "#08", "#66", "#120", "#126", "#127", "#124"];
 
 //Helper function, shuffles an array.
 function shuffle(array) {
@@ -78,6 +96,38 @@ function shuffle(array) {
     let j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
   }
+}
+
+//Helper function, wraps text in a canvas. Credit to HTML5CanvasTutorials
+// https://www.html5canvastutorials.com/tutorials/html5-canvas-wrap-text-tutorial/
+//and modified by stackoverflow user Jake to add line break support
+// https://stackoverflow.com/a/17777674
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+  var lines = text.split("\n");
+
+  for (var i = 0; i < lines.length; i++) {
+
+      var words = lines[i].split(' ');
+      var line = '';
+
+      for (var n = 0; n < words.length; n++) {
+          var testLine = line + words[n] + ' ';
+          var metrics = context.measureText(testLine);
+          var testWidth = metrics.width;
+          if (testWidth > maxWidth && n > 0) {
+              context.fillText(line, x, y);
+              line = words[n] + ' ';
+              y += lineHeight;
+          }
+          else {
+              line = testLine;
+          }
+      }
+
+      context.fillText(line, x, y);
+      y += lineHeight;
+  }
+
 }
 
 class Feature
@@ -100,11 +150,13 @@ class Feature
 
 class WisdomFeature extends Feature
 {
-  constructor(text)
+  constructor(text, title)
   {
     super(Feature);
     this.type = "wisdom";
     this.wisdomText = text;
+    this.wisdomTitle = title;
+    this.cachedTextCanvas = null;
   }
 
   onFeature()
@@ -774,7 +826,10 @@ class Game
           if (this.currentQuadrantLevels[oppositeQuadrant] >= WISDOM_LEVEL_THRESHOLD-1)
           {
             let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
-            let wisdom = new WisdomFeature(WISDOMS[Math.floor(Math.random()*WISDOMS.length)]);
+
+            let wisdomID = Math.floor(Math.random()*WISDOMS.length);
+
+            let wisdom = new WisdomFeature(WISDOMS[wisdomID], WISDOM_TITLES[wisdomID]);
             wisdomBlock.features.push(wisdom);
           }
 
@@ -1621,6 +1676,12 @@ class GameRenderer
       }
 
       this.displaySupporters(game);
+
+      if (game.activeFeatures.length > 0)
+      {
+        this.displayWisdom(game);
+      }
+
       for (let i = 0; i < this.layerOrder.length; i++)
       {
         this.drawLayer(this.layers[this.layerOrder[i]]);
@@ -1629,6 +1690,47 @@ class GameRenderer
       window.requestAnimationFrame(function () { this.renderLoop(game); }.bind(game.renderer));
 
       this.renderTick++;
+    }
+
+    displayWisdom(game)
+    {
+      let textCanvas = null;
+      let fontSize = Math.floor(this.blockWidth*0.7);
+      for (let i = 0; i < game.activeFeatures.length; i++)
+      {
+        let feature = game.activeFeatures[i];
+        if (feature.wisdomText !== undefined)
+        {
+          if (feature.cachedTextCanvas === null)
+          {
+            console.log("cachedtextcanvas == null");
+
+            textCanvas = document.createElement('canvas');
+            textCanvas.width = this.canvasSquareSize;
+            textCanvas.height = this.canvasSquareSize;
+            let t_ctx = textCanvas.getContext('2d');
+
+            t_ctx.fillStyle = "#FFFFFF99";
+            t_ctx.fillRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
+            t_ctx.font = fontSize + "pt Calibri";
+            t_ctx.fillStyle = "#111";
+
+            wrapText(t_ctx, feature.wisdomTitle, 10, fontSize+10, this.canvasSquareSize-40, fontSize+4);
+
+            wrapText(t_ctx, feature.wisdomText, 10, fontSize+10+(fontSize*2), this.canvasSquareSize-40, fontSize+4);
+            feature.cachedTextCanvas = textCanvas;
+          }
+          else
+          {
+            textCanvas = feature.cachedTextCanvas;
+          }
+          break;
+        }
+      }
+      if (textCanvas !== null)
+      {
+        this.layers["supporters"].ctx.drawImage(textCanvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
+      }
     }
 
     displaySupporters(game)
