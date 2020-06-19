@@ -1078,22 +1078,22 @@ class Game
 
     if (!this.player.moving)
     {
-      if (e.key === 's')
+      if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown')
       {
         //this.player.moveToNextDecision(this.player.xPos, this.player.yPos, this.player.xPos, this.player.yPos+1, 2, this.maze, []);
         this.player.moveInDirection(this.currentMaze, 2);
       }
-      else if (e.key === 'w')
+      else if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp')
       {
         //this.player.moveToNextDecision(this.player.xPos, this.player.yPos, this.player.xPos, this.player.yPos-1, 0, this.maze, []);
         this.player.moveInDirection(this.currentMaze, 0);
       }
-      else if (e.key === 'a')
+      else if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft')
       {
       //  this.player.moveToNextDecision(this.player.xPos, this.player.yPos, this.player.xPos-1, this.player.yPos, 3, this.maze, []);
         this.player.moveInDirection(this.currentMaze, 3);
       }
-      else if (e.key === 'd')
+      else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight')
       {
         //this.player.moveToNextDecision(this.player.xPos, this.player.yPos, this.player.xPos+1, this.player.yPos, 1, this.maze, []);
         this.player.moveInDirection(this.currentMaze, 1);
