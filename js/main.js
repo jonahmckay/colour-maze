@@ -1,6 +1,6 @@
 "use strict";
 
-Pizzicato.volume = 1;
+Pizzicato.volume = 0;
 // directions: [N, E, S, W]
 
 let overlayElementCount = 0;
@@ -69,11 +69,52 @@ const WALL_TILES = [
   "w-wall.png"
 ];
 
+const WISDOM_LEVEL_THRESHOLD = 1;
+const WISDOMS = ["if a ball is too big for your mouth, it's not yours"];
+
 //Helper function, shuffles an array.
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
     let j = Math.floor(Math.random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
+class Feature
+{
+    constructor()
+    {
+      this.type = "none";
+    }
+
+    onFeature()
+    {
+      console.log(this.wisdomText);
+    }
+
+    offFeature()
+    {
+      console.log("off feature!");
+    }
+}
+
+class WisdomFeature extends Feature
+{
+  constructor(text)
+  {
+    super(Feature);
+    this.type = "wisdom";
+    this.wisdomText = text;
+  }
+
+  onFeature()
+  {
+    console.log(this.wisdomText);
+  }
+
+  offFeature()
+  {
+    console.log("off feature!");
   }
 }
 
@@ -515,7 +556,8 @@ class Trail
 
   displayTrail(layer)
   {
-    layer.ctx.lineWidth = 20;
+    layer.ctx.lineWidth = game.renderer.blockWidth/2;
+    layer.ctx.lineCap = "round";
     for (let i = 0; i < this.nodes.length-1; i++)
     {
       let n1 = this.nodes[i];
@@ -523,6 +565,7 @@ class Trail
       let gradient = layer.ctx.createLinearGradient(n1.xPos, n1.yPos, n2.xPos, n2.yPos);
       gradient.addColorStop("0", n1.colour);
       gradient.addColorStop("1", n2.colour);
+
       layer.ctx.strokeStyle = gradient;
 
       layer.ctx.beginPath();
@@ -622,6 +665,9 @@ class Player
         let blockHeight = game.renderer.blockHeight;
 
         let trailNode = new TrailNode((this.xPos*blockWidth)+(blockWidth/2), (this.yPos*blockHeight)+(blockHeight/2));
+
+        trailNode.colour = game.quadrants[game.currentMaze.getPositionQuadrant(this.xPos, this.yPos)].colours[0].string;
+
         this.playerTrail.addNode(trailNode);
 
         if (this.currentPath.length > 1)
@@ -690,6 +736,7 @@ class Game
     this.renderer = new GameRenderer();
     this.gameLoaded = false;
 
+    this.activeFeatures = [];
   }
 
   //Runs every game tick (arbitrary value, currently every 1/20 seconds)
@@ -721,7 +768,16 @@ class Game
         if (!this.quadrantsRegenerated[oppositeQuadrant])
         {
           this.generator.quadrants[oppositeQuadrant] = this.generator.generateQuadrant(oppositeQuadrant);
+
           this.currentMaze.grid = this.generator.stitchQuadrants(this.generator.quadrants);
+
+          if (this.currentQuadrantLevels[oppositeQuadrant] >= WISDOM_LEVEL_THRESHOLD-1)
+          {
+            let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
+            let wisdom = new WisdomFeature(WISDOMS[Math.floor(Math.random()*WISDOMS.length)]);
+            wisdomBlock.features.push(wisdom);
+          }
+
           this.quadrantsRegenerated[oppositeQuadrant] = true;
           this.quadrantsLeft[oppositeQuadrant] = false;
           this.quadrantsVisited[oppositeQuadrant] = false;
@@ -743,6 +799,8 @@ class Game
         }
 
       }
+      this.updateFeatures();
+
       this.gameTime++;
     }
     else if (this.state === "menu")
@@ -769,6 +827,26 @@ class Game
     }
   }
 
+  updateFeatures()
+  {
+    let currentBlock = this.currentMaze.getBlock(this.player.xPos, this.player.yPos);
+
+    if (this.activeFeatures !== currentBlock.features)
+    {
+      for (let i = 0; i < this.activeFeatures.length; i++)
+      {
+        this.activeFeatures[i].offFeature();
+      }
+
+      this.activeFeatures = currentBlock.features;
+
+      for (let i = 0; i < this.activeFeatures.length; i++)
+      {
+        this.activeFeatures[i].onFeature();
+      }
+    }
+  }
+
   startSong()
   {
     this.renderer.assets.getAsset("song").sound.loop = true;
@@ -787,6 +865,7 @@ class Game
 
     let zone;
     let anchor;
+    //TODO: change constant
     let baseOffset = 60;
     let yOffset = null;
 
@@ -825,18 +904,22 @@ class Game
         case 0:
           zone = "B0";
           anchor = "top-left";
+          yOffset = baseOffset;
           break;
         case 1:
           zone = "B0";
           anchor = "top-right";
+          yOffset = baseOffset;
           break;
         case 2:
           zone = "B1";
           anchor = "bottom-right";
+          yOffset = -baseOffset;
           break;
         case 3:
           zone = "B1";
           anchor = "bottom-left";
+          yOffset = -baseOffset;
           break;
         default:
           console.log("INVALID QUADRANT");
@@ -909,6 +992,7 @@ class Game
 
     let currentLevel = this.currentQuadrantLevels[quadrant];
     let newQuadrant = new Quadrant();
+
     let primaryColour = this.quadrantColourSets[currentLevel][quadrant];
     let triad = this.generateTriadFromColour(primaryColour);
 
@@ -981,6 +1065,7 @@ class Block
   constructor()
   {
     this.walls = [true, true, true, true];
+    this.features = [];
     this.visited = false;
     this.dead = false;
   }
@@ -1047,6 +1132,11 @@ class Maze
     {
       this.initializeAsQuadrant(quadrant);
     }
+  }
+
+  getBlock(x, y)
+  {
+    return this.grid[x][y];
   }
 
   initialize()
@@ -1642,15 +1732,11 @@ class GameRenderer
         {
           for (let y = 0; y < maze.height; y++)
           {
-            this.displayBlockSolid(x, y, maze.grid[x][y]);
-          }
-        }
-
-        for (let x = 0; x < maze.width; x++)
-        {
-          for (let y = 0; y < maze.height; y++)
-          {
             if (!maze.grid[x][y].dead) {
+              if (maze.grid[x][y].features.length > 0)
+              {
+                this.displayBlockFeatures(x, y, maze.grid[x][y]);
+              }
               this.displayBlockWalls(x, y, maze.grid[x][y]);
             }
           }
@@ -1767,6 +1853,14 @@ class GameRenderer
       }
     }
 
+    displayBlockFeatures(xPos, yPos, block)
+    {
+      for (let i = 0; i < block.features.length; i++)
+      {
+        this.layers["maze"].ctx.fillStyle = "red";
+        this.layers["maze"].ctx.fillRect((xPos*this.blockWidth)+5, (yPos*this.blockHeight)+5, this.blockWidth-10, this.blockHeight-10);
+      }
+    }
     displayBlockSolid(xPos, yPos, block)
     {
         this.ctx.beginPath();
