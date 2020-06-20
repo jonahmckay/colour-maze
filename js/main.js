@@ -1,6 +1,6 @@
 "use strict";
 
-Pizzicato.volume = 1;
+Pizzicato.volume = 0;
 // directions: [N, E, S, W]
 
 let overlayElementCount = 0;
@@ -26,8 +26,17 @@ const SUPPORTER_IDS = [
   "supporter4",
   "supporter5",
   "supporter6",
-  "supporter7"
+  "supporter7",
+  "supporter8"
 ];
+
+const WEATHER_IDS = [
+  "weather1"
+];
+
+const WEATHER_MOVE_COUNT = 10;
+const WEATHER_REMOVE_CHANCE = 0.2;
+const TINT_CHANCE = 0.7;
 
 const DEADSPACE_IDS = [
   "deadspace1",
@@ -70,6 +79,8 @@ const WALL_TILES = [
 ];
 
 const WISDOM_LEVEL_THRESHOLD = 1;
+const WISDOM_CHANCE = 0.33;
+
 const WISDOMS = ["Peredur rode on towards a river valley whose edges were forested,\nwith level meadows on both sides of the river; \non one bank there was a flock of white sheep,\nand on the other a flock of black sheep.\nWhen a white sheep bleated a black sheep would cross the river and turn white,\nand when a black sheep bleated a white sheep\nwould cross the river and turn black.\nOn the bank of the river he saw a tall tree: from the roots to crown on half was aflame and the other green with leaves.",
 
 "Peredur himself set out the next morning, crossing a long stretch of desert without finding a single dwelling until at last he came to a poor small house, and there he heard how there was lying on a gold ring a serpent which had not left standing a dwelling for seven miles round.",
@@ -161,12 +172,33 @@ class WisdomFeature extends Feature
 
   onFeature()
   {
+    if (this.wisdomText === null || this.wisdomText === undefined)
+    {
+      this.assignText();
+    }
     console.log(this.wisdomText);
   }
 
   offFeature()
   {
     console.log("off feature!");
+  }
+
+  assignText()
+  {
+    if (!game.initialTextRead)
+    {
+      this.wisdomText = WISDOMS[0];
+      this.wisdomTitle = WISDOM_TITLES[0];
+      game.initialTextRead = true;
+    }
+    else
+    {
+      let wisdomID = Math.floor(Math.random()*WISDOMS.length);
+
+      this.wisdomText = WISDOMS[wisdomID];
+      this.wisdomTitle = WISDOM_TITLES[wisdomID];
+    }
   }
 }
 
@@ -264,6 +296,12 @@ class OverlayElement
     }
   }
 
+  setSize(x, y)
+  {
+    this.width = x;
+    this.height = y;
+    this.positionCached = false;
+  }
   setTint(tint)
   {
     this.tint = tint;
@@ -661,7 +699,7 @@ class Player
   {
      if (!maze.grid[this.xPos][this.yPos].walls[direction])
      {
-
+      game.moveCount++;
       let nextX = this.xPos + DX[direction];
       let nextY = this.yPos + DY[direction];
 
@@ -788,7 +826,12 @@ class Game
     this.renderer = new GameRenderer();
     this.gameLoaded = false;
 
+    this.initialTextRead = false;
     this.activeFeatures = [];
+
+    this.moveCount = 0;
+    this.moveCountAtLastUpdate = 0;
+    this.currentWeather = null;
   }
 
   //Runs every game tick (arbitrary value, currently every 1/20 seconds)
@@ -825,12 +868,13 @@ class Game
 
           if (this.currentQuadrantLevels[oppositeQuadrant] >= WISDOM_LEVEL_THRESHOLD-1)
           {
-            let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
+            if (Math.random() < WISDOM_CHANCE)
+            {
+              let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
 
-            let wisdomID = Math.floor(Math.random()*WISDOMS.length);
-
-            let wisdom = new WisdomFeature(WISDOMS[wisdomID], WISDOM_TITLES[wisdomID]);
-            wisdomBlock.features.push(wisdom);
+              let wisdom = new WisdomFeature(null, null);
+              wisdomBlock.features.push(wisdom);
+            }
           }
 
           this.quadrantsRegenerated[oppositeQuadrant] = true;
@@ -854,7 +898,9 @@ class Game
         }
 
       }
+
       this.updateFeatures();
+      this.checkMoveTriggers();
 
       this.gameTime++;
     }
@@ -880,6 +926,46 @@ class Game
         this.renderer.loadAssets();
       }
     }
+  }
+
+  checkMoveTriggers()
+  {
+    if (this.moveCount !== this.moveCountAtLastUpdate)
+    {
+
+      if (this.currentWeather === null && this.moveCount % WEATHER_MOVE_COUNT === 0)
+      {
+        this.currentWeather = this.generateWeather();
+      }
+      else
+      {
+        if (Math.random() < WEATHER_REMOVE_CHANCE && this.currentWeather !== null)
+        {
+          this.renderer.weatherZones["G0"].removeOverlayElement(this.currentWeather)
+          this.currentWeather = null;
+        }
+      }
+
+      this.moveCountAtLastUpdate = this.moveCount;
+    }
+  }
+
+  generateWeather()
+  {
+    let weatherID = WEATHER_IDS[Math.floor(Math.random()*WEATHER_IDS.length)];
+
+    let weather = new OverlayElement(this.renderer.assets.getAsset(weatherID));
+
+    if (Math.random() < TINT_CHANCE)
+    {
+      weather.setTint(this.quadrants[Math.floor(Math.random()*4)].colours[0].string);
+    }
+
+    weather.animation.timeDivider = 4;
+    weather.setSize(this.renderer.canvasSquareSize+(this.renderer.marginMinimum*2), this.renderer.canvasSquareSize+(this.renderer.marginMinimum*2));
+    weather.setOffset(this.renderer.squareWidthOffset-this.renderer.marginMinimum, 0);
+    this.renderer.weatherZones["G0"].addOverlayElement(weather);
+    return weather;
   }
 
   updateFeatures()
@@ -959,22 +1045,18 @@ class Game
         case 0:
           zone = "B0";
           anchor = "top-left";
-          yOffset = baseOffset;
           break;
         case 1:
           zone = "B0";
           anchor = "top-right";
-          yOffset = baseOffset;
           break;
         case 2:
           zone = "B1";
           anchor = "bottom-right";
-          yOffset = -baseOffset;
           break;
         case 3:
           zone = "B1";
           anchor = "bottom-left";
-          yOffset = -baseOffset;
           break;
         default:
           console.log("INVALID QUADRANT");
@@ -982,7 +1064,7 @@ class Game
     }
 
     let supporter = new OverlayElement(this.renderer.assets.getAsset(supporterID));
-    if (Math.random() < 0.7)
+    if (Math.random() < TINT_CHANCE)
     {
       supporter.setTint(this.quadrants[quadrant].colours[0].string);
     }
@@ -1452,6 +1534,7 @@ class GameRenderer
       this.animations = {};
 
       this.supporterZones = {};
+      this.weatherZones = {};
 
       let characterAnimation = new Animation();
       characterAnimation.frameCount = 296;
@@ -1480,15 +1563,6 @@ class GameRenderer
 
     loadAssets()
     {
-      for (let i = 0; i < WALL_TILES.length; i++)
-      {
-        let tileName = WALL_TILES[i];
-        let tileSrc = `imgs/tiles/${tileName}`;
-        this.assets.addAsset(tileName, tileSrc);
-      }
-
-      this.assets.addAsset("background", "imgs/background.jpg");
-
       this.assets.addAnimatedAsset("deadspace1", "imgs/deadspace/deadspace1.png", 256, 248);
       this.assets.addAnimatedAsset("deadspace2", "imgs/deadspace/deadspace2.png", 256, 256);
       this.assets.addAnimatedAsset("deadspace3", "imgs/deadspace/deadspace3.png", 256, 256);
@@ -1503,8 +1577,10 @@ class GameRenderer
       this.assets.addAnimatedAsset("supporter5", "imgs/supporter5.png", 234, 196);
       this.assets.addAnimatedAsset("supporter6", "imgs/supporter6.png", 256, 256);
       this.assets.addAnimatedAsset("supporter7", "imgs/supporter7.png", 256, 256);
+      this.assets.addAnimatedAsset("supporter8", "imgs/supporter8.png", 230, 237);
 
-      this.assets.addAsset("character", "imgs/character/character.png");
+      this.assets.addAnimatedAsset("weather1", "imgs/weather1.png", 256, 256);
+
       this.assets.addAsset("quadrantbackground", "imgs/quadrantbackground.png");
 
       this.assets.addAsset("quad0", "imgs/quads/quad0.png");
@@ -1512,7 +1588,7 @@ class GameRenderer
       this.assets.addAsset("quad2", "imgs/quads/quad2.png");
       this.assets.addAsset("quad3", "imgs/quads/quad3.png");
 
-      this.assets.addSoundAsset("song", "sounds/coloursong.mp3");
+      this.assets.addSoundAsset("song", "sounds/coloursongremix.mp3");
     }
 
     initializeSupporterZones()
@@ -1528,6 +1604,8 @@ class GameRenderer
       this.supporterZones["C0"] = new SupporterZone(0, 0, 0, 0);
 
       this.supporterZones["G0"] = new SupporterZone(0, 0, 0, 0);
+
+      this.weatherZones["G0"] = new SupporterZone(0, 0, 0, 0);
 
       this.calculateSupporterZones();
     }
@@ -1564,6 +1642,9 @@ class GameRenderer
 
       this.supporterZones["G0"].setSize(this.canvasWidth, this.canvasHeight);
       this.supporterZones["G0"].setPosition(0, 0);
+
+      this.weatherZones["G0"].setSize(this.canvasWidth, this.canvasHeight);
+      this.weatherZones["G0"].setPosition(0, 0);
     }
 
     setDeadspace(id)
@@ -1676,6 +1757,7 @@ class GameRenderer
       }
 
       this.displaySupporters(game);
+      this.displayWeathers(game);
 
       if (game.activeFeatures.length > 0)
       {
@@ -1735,23 +1817,19 @@ class GameRenderer
 
     displaySupporters(game)
     {
-      // let zone = this.supporterZones["S0"];
-      // this.layers["supporters"].ctx.fillStyle = "#FF0000";
-      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      // this.layers["supporters"].ctx.fillStyle = "#00FFFF";
-      // zone = this.supporterZones["S1"];
-      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      // this.layers["supporters"].ctx.fillStyle = "#00FF00";
-      // zone = this.supporterZones["B0"];
-      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-      // this.layers["supporters"].ctx.fillStyle = "#0000FF";
-      // zone = this.supporterZones["B1"];
-      // this.layers["supporters"].ctx.fillRect(zone.xPos, zone.yPos, zone.width, zone.height);
-
       for (let i = 0; i < Object.keys(this.supporterZones).length; i++)
       {
         let zone = this.supporterZones[Object.keys(this.supporterZones)[i]];
         zone.drawToContext(this.layers["supporters"].ctx, 0, 0);
+      }
+    }
+
+    displayWeathers(game)
+    {
+      for (let i = 0; i < Object.keys(this.weatherZones).length; i++)
+      {
+        let zone = this.weatherZones[Object.keys(this.weatherZones)[i]];
+        zone.drawToContext(this.layers["standard"].ctx, 0, 0);
       }
     }
 
