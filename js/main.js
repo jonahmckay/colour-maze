@@ -1,6 +1,6 @@
 "use strict";
 
-Pizzicato.volume = 0;
+Pizzicato.volume = 1;
 // directions: [N, E, S, W]
 
 let overlayElementCount = 0;
