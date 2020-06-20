@@ -27,7 +27,10 @@ const SUPPORTER_IDS = [
   "supporter5",
   "supporter6",
   "supporter7",
-  "supporter8"
+  "supporter8",
+  "supporter9",
+  "supporter10",
+  "supporter11"
 ];
 
 const WEATHER_IDS = [
@@ -1578,6 +1581,9 @@ class GameRenderer
       this.assets.addAnimatedAsset("supporter6", "imgs/supporter6.png", 256, 256);
       this.assets.addAnimatedAsset("supporter7", "imgs/supporter7.png", 256, 256);
       this.assets.addAnimatedAsset("supporter8", "imgs/supporter8.png", 230, 237);
+      this.assets.addAnimatedAsset("supporter9", "imgs/supporter9.png", 256, 256);
+      this.assets.addAnimatedAsset("supporter10", "imgs/supporter10.png", 256, 256);
+      this.assets.addAnimatedAsset("supporter11", "imgs/supporter11.png", 267, 256);
 
       this.assets.addAnimatedAsset("weather1", "imgs/weather1.png", 256, 256);
 
