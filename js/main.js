@@ -1,6 +1,8 @@
 "use strict";
 
 Pizzicato.volume = 1;
+let musicStarted = false;
+
 // directions: [N, E, S, W]
 
 let overlayElementCount = 0;
@@ -913,7 +915,6 @@ class Game
       {
         this.initializeQuadrantData();
         this.initializeOverlayData();
-        this.startSong();
         this.randomizePlayerStartPosition();
         this.gameLoaded = true;
         this.renderer.setDeadspace(this.renderer.assets.getAsset(DEADSPACE_IDS[Math.floor(Math.random()*DEADSPACE_IDS.length)]));
@@ -1162,6 +1163,18 @@ class Game
   buttonPressed(e)
   {
     this.renderer.updateFrame = true;
+
+    if (!musicStarted && game.renderer.assetsLoaded())
+    {
+      try {
+        musicStarted = true;
+        game.startSong();
+      }
+      catch(err)
+      {
+        musicStarted = false;
+      }
+    }
 
     if (!this.player.moving)
     {
@@ -2226,7 +2239,17 @@ function setup()
   // Subscribe to a desired event
   manager.on('swipe', function(e) {
     var direction = e.offsetDirection;
-    console.log(direction);
+    if (!musicStarted && game.renderer.assetsLoaded())
+    {
+      try {
+        musicStarted = true;
+        game.startSong();
+      }
+      catch(err)
+      {
+        musicStarted = false;
+      }
+    }
     switch (direction)
     {
       case 2:
