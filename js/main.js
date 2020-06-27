@@ -1145,6 +1145,8 @@ class Game
     let assetName = `quad${quadrant}`;
     newQuadrant.cacheBackgroundFromAsset(this.renderer.assets.getAsset(assetName));
     this.quadrants[quadrant] = newQuadrant;
+
+    this.renderer.mazeWallsCached = false;
   }
 
   initializeQuadrantData()
@@ -1485,6 +1487,10 @@ class GameRenderer
       this.canvas = document.getElementById("canvas");
       this.ctx = this.canvas.getContext("2d");
       this.renderTick = 0;
+
+      this.mazeWallsCached = false;
+      this.mazeWallsImage = document.createElement('canvas');
+      this.mazeWallsContext = this.mazeWallsImage.getContext('2d');
 
       this.blockWidth = 30;
       this.blockHeight = 30;
@@ -1914,45 +1920,60 @@ class GameRenderer
 
         //this.ctx.drawImage(this.layers["mazeBackground"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
 
-        for (let x = 0; x < maze.width; x++)
+        if (!this.mazeWallsCached)
         {
-          for (let y = 0; y < maze.height; y++)
+
+          for (let x = 0; x < maze.width; x++)
           {
-            if (!maze.grid[x][y].dead) {
-              if (maze.grid[x][y].features.length > 0)
-              {
-                this.displayBlockFeatures(x, y, maze.grid[x][y]);
+            for (let y = 0; y < maze.height; y++)
+            {
+              if (!maze.grid[x][y].dead) {
+                if (maze.grid[x][y].features.length > 0)
+                {
+                  this.displayBlockFeatures(x, y, maze.grid[x][y]);
+                }
+                this.displayBlockWalls(x, y, maze.grid[x][y]);
               }
-              this.displayBlockWalls(x, y, maze.grid[x][y]);
             }
           }
+
+
+          this.layers["mazeTexture"].ctx.drawImage(this.layers["maze"].canvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
+          this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-in";
+
+          let quadrantSize = this.canvasSquareSize/2;
+          let gradient;
+
+          let gradientCanvas = document.createElement("canvas");
+          gradientCanvas.width = this.canvasSquareSize;
+          gradientCanvas.height = this.canvasSquareSize;
+          let g_ctx = gradientCanvas.getContext('2d');
+
+          for (let i = 0; i <= 3; i++)
+          {
+            gradient = this.layers["mazeTexture"].ctx.createLinearGradient(quadrantSize, quadrantSize,
+              this.canvasSquareSize*QDX[i], this.canvasSquareSize*QDY[i]);
+            gradient.addColorStop(0, game.quadrants[i].colours[1].string);
+            gradient.addColorStop(1, game.quadrants[i].colours[2].string);
+            g_ctx.fillStyle = gradient;
+            g_ctx.fillRect(quadrantSize*QDX[i], quadrantSize*QDY[i], quadrantSize, quadrantSize);
+          }
+
+          this.layers["mazeTexture"].ctx.drawImage(gradientCanvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
+          this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-over";
+
+          this.mazeWallsImage.width = this.canvasSquareSize;
+          this.mazeWallsImage.height = this.canvasSquareSize;
+          this.mazeWallsContext.clearRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
+          this.mazeWallsContext.drawImage(this.layers["mazeTexture"].canvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
+          this.layers["mazeTexture"].ctx.clearRect(0, 0, this.canvasSquareSize, this.canvasSquareSize);
+          this.mazeWallsCached = true;
         }
 
 
-        this.layers["mazeTexture"].ctx.drawImage(this.layers["maze"].canvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
-        this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-in";
+        this.layers["mazeTexture"].ctx.drawImage(this.mazeWallsImage, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
 
-        let quadrantSize = this.canvasSquareSize/2;
-        let gradient;
 
-        let gradientCanvas = document.createElement("canvas");
-        gradientCanvas.width = this.canvasSquareSize;
-        gradientCanvas.height = this.canvasSquareSize;
-        let g_ctx = gradientCanvas.getContext('2d');
-
-        for (let i = 0; i <= 3; i++)
-        {
-          gradient = this.layers["mazeTexture"].ctx.createLinearGradient(quadrantSize, quadrantSize,
-            this.canvasSquareSize*QDX[i], this.canvasSquareSize*QDY[i]);
-          gradient.addColorStop(0, game.quadrants[i].colours[1].string);
-          gradient.addColorStop(1, game.quadrants[i].colours[2].string);
-          g_ctx.fillStyle = gradient;
-          g_ctx.fillRect(quadrantSize*QDX[i], quadrantSize*QDY[i], quadrantSize, quadrantSize);
-        }
-
-        this.layers["mazeTexture"].ctx.drawImage(gradientCanvas, 0, 0, this.canvasSquareSize, this.canvasSquareSize);
-        this.layers["mazeTexture"].ctx.globalCompositeOperation = "source-over";
-        //this.ctx.drawImage(this.layers["mazeTexture"].canvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
       }
 
     }
