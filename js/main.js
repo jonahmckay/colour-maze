@@ -2212,6 +2212,37 @@ function setup()
 
   //"game loop" interval.
   setInterval(function() { game.gameLoop() }.bind(game), 50)
+
+
+  // swipe recogntion for mobile //
+
+  var manager = new Hammer.Manager(game.renderer.canvas);
+
+  var Swipe = new Hammer.Swipe();
+
+  // Add the recognizer to the manager
+  manager.add(Swipe);
+
+  // Subscribe to a desired event
+  manager.on('swipe', function(e) {
+    var direction = e.offsetDirection;
+    console.log(direction);
+    switch (direction)
+    {
+      case 2:
+        game.player.moveInDirection(game.currentMaze, 3);
+        break;
+      case 4:
+        game.player.moveInDirection(game.currentMaze, 1);
+        break;
+      case 8:
+        game.player.moveInDirection(game.currentMaze, 0);
+        break;
+      case 16:
+        game.player.moveInDirection(game.currentMaze, 2);
+        break;
+    }
+    });
 }
 
 document.addEventListener("DOMContentLoaded", function () { setup(); });
