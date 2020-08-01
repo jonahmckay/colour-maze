@@ -4,3 +4,8 @@ html, body {
   margin: 0;
   overflow: hidden;
 }
+
+@font-face {
+    font-family: 'Belleza';
+    src: url('Belleza-Regular.ttf');
+}

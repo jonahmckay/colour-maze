@@ -258,6 +258,34 @@ class SupporterZone
   }
 }
 
+class TextElement
+{
+    constructor(text)
+    {
+      this.text = text;
+      this.asset = new ImageAsset(this.generateImage(text));
+      this.element = new OverlayElement(this.asset);
+    }
+
+    generateImage(text)
+    {
+      let textCanvas = document.createElement('canvas');
+      let fontSize = Math.floor(game.renderer.blockWidth*1);
+      textCanvas.width = fontSize*10;
+      textCanvas.height = fontSize*10;
+      let t_ctx = textCanvas.getContext('2d');
+
+      t_ctx.fillStyle =  "#FFF3";
+      t_ctx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+      t_ctx.font = fontSize + "pt Belleza";
+      t_ctx.fillStyle = "#000";
+
+      wrapText(t_ctx, text, 10, fontSize+10, fontSize*10, fontSize+4);
+
+      return textCanvas;
+    }
+}
+
 //for displaying animations and HUD elements
 
 class OverlayElement
@@ -307,6 +335,7 @@ class OverlayElement
     this.height = y;
     this.positionCached = false;
   }
+
   setTint(tint)
   {
     this.tint = tint;
@@ -619,16 +648,6 @@ class Particle
   }
 }
 
-class DisplayElement
-{
-  constructor()
-  {
-    this.xPos = 0;
-    this.yPos = 0;
-    this.layer = "standard";
-  }
-}
-
 class Trail
 {
   constructor()
@@ -837,6 +856,7 @@ class Game
     this.moveCount = 0;
     this.moveCountAtLastUpdate = 0;
     this.currentWeather = null;
+    this.textElements = [];
   }
 
   //Runs every game tick (arbitrary value, currently every 1/20 seconds)
@@ -848,6 +868,7 @@ class Game
   {
     if (this.state === "game")
     {
+      this.updateTextElements();
       this.player.updateMovement(this.currentMaze);
       if (this.currentMaze.getPositionQuadrant(this.player.xPos, this.player.yPos) !== this.currentQuadrant)
       {
@@ -929,6 +950,47 @@ class Game
         this.renderer.createLoadingElement();
         this.renderer.loadAssets();
       }
+    }
+  }
+
+  addTextElement()
+  {
+    let markov = new MarkovGeneratorWord(2, 50);
+
+    var lines = markovtext.split('\n');
+
+
+    for (var i = 0; i < lines.length; i++) {
+    // Trim out any extra white space
+    markov.feed(lines[i].trim());
+    }
+    let markovBlock = markov.generate();
+    let newElement = new TextElement(markovBlock);
+    this.textElements.push(newElement);
+
+    let xOffset = this.renderer.squareWidthOffset;
+    if (Math.random() > 0.5)
+    {
+      xOffset += this.renderer.canvasSquareSize;
+    }
+
+    newElement.element.yOffset = -250;
+    newElement.element.xOffset = -(newElement.element.width/2) + xOffset;
+
+    this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
+  }
+
+  removeTextElement(element)
+  {
+    //TODO
+  }
+
+  updateTextElements()
+  {
+    for (let i = 0; i < this.textElements.length; i++)
+    {
+      this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2.5);
+      console.log(this.textElements[i])
     }
   }
 
@@ -1211,6 +1273,11 @@ class Game
         this.player.moveIncrement = 0.1;
       }
     }
+
+    if (e.key === "t")
+    {
+      this.addTextElement();
+    }
   }
 }
 
@@ -1391,6 +1458,15 @@ class Asset
     this.image.onload = function () { onload(); this.loaded = true; }.bind(this);
     this.loaded = false;
     this.image.src = url;
+  }
+}
+
+class ImageAsset
+{
+  constructor(image)
+  {
+    this.image = image;
+    this.loaded = true;
   }
 }
 
