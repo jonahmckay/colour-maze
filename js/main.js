@@ -23,7 +23,7 @@ const OPPOSITE = [2, 3, 0, 1];
 
 const SUPPORTER_IDS = [
   "supporter1",
-  "supporter2",
+  //"supporter2",
   "supporter3",
   "supporter4",
   "supporter5",
@@ -275,7 +275,13 @@ class TextElement
       textCanvas.height = fontSize*10;
       let t_ctx = textCanvas.getContext('2d');
 
-      t_ctx.fillStyle =  "#FFF3";
+      //t_ctx.fillStyle =  "#FFF3";
+      let gradient = t_ctx.createRadialGradient(textCanvas.width/2, textCanvas.height/2, 0, textCanvas.width/2, textCanvas.height/2, textCanvas.height/2);
+      gradient.addColorStop(0, "#FFFF");
+      let chosenColour = game.quadrants[Math.floor(Math.random()*4)].colours[0];
+      let newColour = new Colour(chosenColour.h, chosenColour.s, chosenColour.l, 0);
+      gradient.addColorStop(1, newColour.string);
+      t_ctx.fillStyle = gradient;
       t_ctx.fillRect(0, 0, textCanvas.width, textCanvas.height);
       t_ctx.font = fontSize + "pt Belleza";
       t_ctx.fillStyle = "#000";
@@ -524,13 +530,22 @@ class SoundPlayer
 //class which represents a modifiable colour value
 class Colour
 {
-  constructor(h, s, l)
+  constructor(h, s, l, a)
   {
     //hue: 0-360, saturation: 0-100, luminance: 0-100
     this.h = h;
     this.s = s;
     this.l = l;
-    this.string = `hsl(${this.h}, ${this.s}%, ${this.l}%)`;
+    this.a = a;
+    if (a === undefined)
+    {
+      this.a = 1;
+    }
+    this.string = `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.a})`;
+  }
+  updateString()
+  {
+    this.string = `hsla(${this.h}, ${this.s}%, ${this.l}%, ${this.a})`;
   }
 }
 
@@ -990,7 +1005,6 @@ class Game
     for (let i = 0; i < this.textElements.length; i++)
     {
       this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2.5);
-      console.log(this.textElements[i])
     }
   }
 
@@ -1669,7 +1683,7 @@ class GameRenderer
       this.assets.addAnimatedAsset("charactersheet", "imgs/character/characteranimation.png", 256, 256);
 
       this.assets.addAnimatedAsset("supporter1", "imgs/supporter1.png", 201, 182);
-      this.assets.addAnimatedAsset("supporter2", "imgs/supporter2.png", 256, 254);
+      //this.assets.addAnimatedAsset("supporter2", "imgs/supporter2.png", 256, 254);
       this.assets.addAnimatedAsset("supporter3", "imgs/supporter3.png", 221, 256);
       this.assets.addAnimatedAsset("supporter4", "imgs/supporter4.png", 256, 256);
       this.assets.addAnimatedAsset("supporter5", "imgs/supporter5.png", 234, 196);
