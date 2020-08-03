@@ -84,7 +84,9 @@ const WALL_TILES = [
 ];
 
 const WISDOM_LEVEL_THRESHOLD = 1;
-const WISDOM_CHANCE = 0.33;
+const WISDOM_CHANCE = 0.9;
+
+let visionsHad = 0;
 
 const WISDOMS = ["Peredur rode on towards a river valley whose edges were forested,\nwith level meadows on both sides of the river; \non one bank there was a flock of white sheep,\nand on the other a flock of black sheep.\nWhen a white sheep bleated a black sheep would cross the river and turn white,\nand when a black sheep bleated a white sheep\nwould cross the river and turn black.\nOn the bank of the river he saw a tall tree: from the roots to crown on half was aflame and the other green with leaves.",
 
@@ -103,6 +105,8 @@ const WISDOMS = ["Peredur rode on towards a river valley whose edges were forest
 "Things that should be Short.\nA piece of thread when one wants to sew something in a hurry.\nA lamp stand.",
 
 "One has carefully scented a robe and then forgotten about it for several days. When finally one comes to wear it. the aroma is seen more delicious than on freshly scented clothes."];
+
+const FIRST_TEXT = "As you enter the room, a coloured light illuminates familiar patterns and designs. Musical chimes echo through the hallways, and lead you toward a cool breeze. It’s difficult to remember which direction leads you back home, but each symbol and character painted on the wall shares a story that takes you further away.";
 
 const WISDOM_TITLES = ["#011", "#0.5", "#01", "#08", "#66", "#120", "#126", "#127", "#124"];
 
@@ -207,6 +211,49 @@ class WisdomFeature extends Feature
   }
 }
 
+class VisionFeature extends Feature
+{
+  constructor()
+  {
+    super(Feature);
+    this.type = "vision";
+    this.triggered = false;
+    this.incremented = false;
+  }
+
+  onFeature()
+  {
+    if (!this.incremented)
+    {
+      this.incremented = true;
+      visionsHad++;
+    }
+  }
+
+  offFeature()
+  {
+    this.triggered = true;
+    console.log("off feature!");
+  }
+
+  assignText()
+  {
+    if (!game.initialTextRead)
+    {
+      this.wisdomText = WISDOMS[0];
+      this.wisdomTitle = WISDOM_TITLES[0];
+      game.initialTextRead = true;
+    }
+    else
+    {
+      let wisdomID = Math.floor(Math.random()*WISDOMS.length);
+
+      this.wisdomText = WISDOMS[wisdomID];
+      this.wisdomTitle = WISDOM_TITLES[wisdomID];
+    }
+  }
+}
+
 class SupporterZone
 {
   constructor(x, y, w, h)
@@ -260,9 +307,34 @@ class SupporterZone
 
 class TextElement
 {
-    constructor(text)
+    constructor(text, width, height, fontSize)
     {
       this.text = text;
+
+      if (fontSize === undefined)
+      {
+        this.fontSize = Math.floor(game.renderer.blockWidth*1);
+      }
+      else
+      {
+        this.fontSize = fontSize;
+      }
+      if (width === undefined)
+      {
+        this.width = this.fontSize*10;
+      }
+      else
+      {
+        this.width = width;
+      }
+      if (height === undefined)
+      {
+        this.height = this.fontSize*10;
+      }
+      else
+      {
+        this.height = height;
+      }
       this.asset = new ImageAsset(this.generateImage(text));
       this.element = new OverlayElement(this.asset);
     }
@@ -270,9 +342,9 @@ class TextElement
     generateImage(text)
     {
       let textCanvas = document.createElement('canvas');
-      let fontSize = Math.floor(game.renderer.blockWidth*1);
-      textCanvas.width = fontSize*10;
-      textCanvas.height = fontSize*10;
+      let fontSize = this.fontSize;
+      textCanvas.width = this.width;
+      textCanvas.height = this.height;
       let t_ctx = textCanvas.getContext('2d');
 
       //t_ctx.fillStyle =  "#FFF3";
@@ -286,7 +358,7 @@ class TextElement
       t_ctx.font = fontSize + "pt Belleza";
       t_ctx.fillStyle = "#000";
 
-      wrapText(t_ctx, text, 10, fontSize+10, fontSize*10, fontSize+4);
+      wrapText(t_ctx, text, 10, fontSize+10, this.width, fontSize+4);
 
       return textCanvas;
     }
@@ -755,6 +827,12 @@ class Player
     let intersection = false;
     for (let i = 0; i < maze.grid[currentX][currentY].walls.length; i++)
     {
+      //stop at features???
+      if (maze.grid[currentX][currentY].features.length > 0)
+      {
+        intersection = true;
+      }
+
       if (!maze.grid[currentX][currentY].walls[i] && i != OPPOSITE[direction])
       {
         if (pathToTake === -1)
@@ -909,11 +987,18 @@ class Game
 
           if (this.currentQuadrantLevels[oppositeQuadrant] >= WISDOM_LEVEL_THRESHOLD-1)
           {
+            // if (Math.random() < WISDOM_CHANCE)
+            // {
+            //   let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
+            //
+            //   let wisdom = new WisdomFeature(null, null);
+            //   wisdomBlock.features.push(wisdom);
+            // }
             if (Math.random() < WISDOM_CHANCE)
             {
-              let wisdomBlock = this.currentMaze.grid[(QDX[oppositeQuadrant])*(MAZE_WIDTH-1)][(QDY[oppositeQuadrant])*(MAZE_HEIGHT-1)];
+              let wisdomBlock = this.currentMaze.grid[Math.floor(Math.random()*(Math.floor(MAZE_WIDTH/2)))+(QDX[oppositeQuadrant]*(Math.floor(MAZE_WIDTH/2)))][Math.floor(Math.random()*(Math.floor(MAZE_HEIGHT/2)))+(QDY[oppositeQuadrant]*(Math.floor(MAZE_HEIGHT/2)))];
 
-              let wisdom = new WisdomFeature(null, null);
+              let wisdom = new VisionFeature();
               wisdomBlock.features.push(wisdom);
             }
           }
@@ -954,6 +1039,8 @@ class Game
         this.randomizePlayerStartPosition();
         this.gameLoaded = true;
         this.renderer.setDeadspace(this.renderer.assets.getAsset(DEADSPACE_IDS[Math.floor(Math.random()*DEADSPACE_IDS.length)]));
+
+        this.addFirstTextElement();
         this.state = "game";
       }
     }
@@ -995,6 +1082,23 @@ class Game
     this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
   }
 
+  addFirstTextElement()
+  {
+    let newElement = new TextElement(FIRST_TEXT, 400, 400, 20);
+    this.textElements.push(newElement);
+
+    let xOffset = this.renderer.squareWidthOffset;
+    if (Math.random() > 0.5)
+    {
+      xOffset += this.renderer.canvasSquareSize;
+    }
+
+    newElement.element.yOffset = -250;
+    newElement.element.xOffset = -(newElement.element.width/2) + xOffset;
+
+    this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
+  }
+
   removeTextElement(element)
   {
     //TODO
@@ -1002,10 +1106,30 @@ class Game
 
   updateTextElements()
   {
+    if (this.textElements.length < Math.min(visionsHad, 5) && Math.random() < 0.005*(visionsHad+2))
+    {
+      this.addTextElement();
+    }
+
     for (let i = 0; i < this.textElements.length; i++)
     {
-      this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2.5);
+      this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2);
     }
+
+    let textElementsWorking = [...this.textElements];
+    for (let i = 0; i < this.textElements.length; i++)
+    {
+
+      if (this.textElements[i].element.yOffset > 100+this.renderer.canvasHeight)
+      {
+        console.log("text element removed");
+        textElementsWorking.splice(i, 1);
+        console.log(textElementsWorking);
+        this.renderer.supporterZones["G0"].removeOverlayElement(this.textElements[i].element);
+      }
+    }
+    this.textElements = textElementsWorking;
+
   }
 
   checkMoveTriggers()
