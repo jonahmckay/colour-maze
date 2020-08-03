@@ -211,6 +211,53 @@ class WisdomFeature extends Feature
   }
 }
 
+class VisionEffect
+{
+    constructor(colour, timeStarted)
+    {
+      this.colour = colour;
+      this.element = new OverlayElement(game.renderer.assets.getAsset("vision"));
+      if (timeStarted === undefined)
+      {
+        timeStarted = 0;
+      }
+      this.timeStarted = timeStarted;
+      this.currentTime = timeStarted;
+      this.length = 180;
+    }
+
+    getCurrentFade()
+    {
+      //number from 0 to 1.0, presumably
+
+      //fade in
+      if (this.currentTime-this.timeStarted < this.length/2)
+      {
+        return (Math.abs((this.timeStarted-this.currentTime))/(this.length/2));
+      }
+      //fade out
+      else
+      {
+        return (Math.abs(((this.currentTime-this.timeStarted)-this.length))/(this.length/2));
+      }
+    }
+
+    update(timePassed)
+    {
+      this.currentTime += timePassed;
+      this.colour.updateString();
+
+      //this.element.setTint(this.colour.string);
+      this.element.alpha = this.getCurrentFade();
+
+      if (this.currentTime > this.length)
+      {
+        return false;
+      }
+      return true;
+    }
+}
+
 class VisionFeature extends Feature
 {
   constructor()
@@ -226,6 +273,7 @@ class VisionFeature extends Feature
     if (!this.incremented)
     {
       this.incremented = true;
+      game.renderer.addVisionEffect();
       visionsHad++;
     }
   }
@@ -299,6 +347,7 @@ class SupporterZone
   {
     for (let i = 0; i < this.elements.length; i++)
     {
+      ctx.globalAlpha = this.elements[i].alpha;
       let imagePosition = this.elements[i].positionFromAnchor(this.width, this.height);
       ctx.drawImage(this.elements[i].getImage(), imagePosition[0]+this.xPos, imagePosition[1]+this.yPos, this.elements[i].width, this.elements[i].height);
     }
@@ -373,6 +422,7 @@ class OverlayElement
     this.xOffset = 0;
     this.yOffset = 0;
     this.asset = asset;
+    this.image = this.asset.image;
     this.width;
     this.height;
     this.anchor = "absolute";
@@ -391,6 +441,8 @@ class OverlayElement
 
     this.tint = null;
     this.tintedFrames = [];
+
+    this.alpha = 1;
 
     if (this.asset.frames !== undefined)
     {
@@ -454,6 +506,39 @@ class OverlayElement
         this.tintedFrames.push(tintedFrame);
       }
     }
+    else
+    {
+      let baseImage = this.asset.image;
+
+      let tintCanvas = document.createElement('canvas');
+
+      let frameWidth = baseImage.width;
+      let frameHeight = baseImage.height;
+
+      tintCanvas.width = frameWidth;
+      tintCanvas.height = frameHeight;
+
+      let t_ctx = tintCanvas.getContext('2d');
+      t_ctx.fillStyle = tint;
+      t_ctx.fillRect(0, 0, frameWidth, frameHeight);
+
+      t_ctx.globalCompositeOperation = "destination-in";
+
+      t_ctx.drawImage(baseImage, 0, 0, frameWidth, frameHeight);
+
+      let tintedFrame = document.createElement('canvas');
+
+      tintedFrame.width = frameWidth;
+      tintedFrame.height = frameHeight;
+
+      let f_ctx = tintedFrame.getContext('2d');
+
+      f_ctx.drawImage(baseImage, 0, 0, frameWidth, frameHeight);
+      f_ctx.globalCompositeOperation = "color";
+      f_ctx.drawImage(tintCanvas, 0, 0, frameWidth, frameHeight);
+
+      this.image = tintedFrame;
+    }
   }
 
   setOffset(x, y)
@@ -485,7 +570,7 @@ class OverlayElement
     }
     else
     {
-      return this.asset.image;
+      return this.image;
     }
   }
 
@@ -1412,9 +1497,13 @@ class Game
       }
     }
 
-    if (e.key === "t")
+    if (e.key === "p")
     {
       this.addTextElement();
+    }
+    if (e.key === "l")
+    {
+      this.renderer.addVisionEffect();
     }
   }
 }
@@ -1778,6 +1867,8 @@ class GameRenderer
 
       this.deadspace = null;
 
+      this.currentVisionEffect = null;
+
       this.addAnimation("character", characterAnimation);
 
       this.preloadAssets();
@@ -1826,6 +1917,8 @@ class GameRenderer
       this.assets.addAsset("quad1", "imgs/quads/quad1.png");
       this.assets.addAsset("quad2", "imgs/quads/quad2.png");
       this.assets.addAsset("quad3", "imgs/quads/quad3.png");
+
+      this.assets.addAsset("vision", "imgs/vision.png");
 
       this.assets.addSoundAsset("song", "sounds/coloursongremix.mp3");
     }
@@ -1988,7 +2081,7 @@ class GameRenderer
         }
 
         this.displayDeadspace(game);
-
+        this.updateVisionEffect();
       }
       else if (game.state === "menu")
       {
@@ -2052,6 +2145,32 @@ class GameRenderer
       {
         this.layers["supporters"].ctx.drawImage(textCanvas, this.squareWidthOffset, this.squareHeightOffset, this.canvasSquareSize, this.canvasSquareSize);
       }
+    }
+
+    addVisionEffect()
+    {
+      console.log("vision effect added")
+      let visionEffect = new VisionEffect(new Colour(180, 0, 0));
+      this.currentVisionEffect = visionEffect;
+      this.supporterZones["C0"].addOverlayElement(this.currentVisionEffect.element);
+    }
+
+    updateVisionEffect()
+    {
+      if (this.currentVisionEffect !== null)
+      {
+        if (!this.currentVisionEffect.update(1))
+        {
+          this.removeVisionEffect();
+        }
+      }
+    }
+
+    removeVisionEffect()
+    {
+      console.log("vision effect removed");
+      this.supporterZones["C0"].removeOverlayElement(this.currentVisionEffect.element);
+      this.currentVisionEffect = null;
     }
 
     displaySupporters(game)
