@@ -1134,6 +1134,7 @@ class Game
       if (this.renderer.assetsPreloaded())
       {
         this.state = "menu";
+        this.loadFont("Belleza");
         this.renderer.createLoadingElement();
         this.renderer.loadAssets();
       }
@@ -1187,6 +1188,18 @@ class Game
   removeTextElement(element)
   {
     //TODO
+  }
+
+  loadFont(font)
+  {
+    //absurdly hacky
+    let textCanvas = document.createElement("canvas");
+    let t_ctx = textCanvas.getContext('2d');
+
+    t_ctx.font = "10" + "pt " + "Belleza";
+    t_ctx.fillStyle = "#000";
+
+    wrapText(t_ctx, "test", 10, 10, 200, 20);
   }
 
   updateTextElements()
