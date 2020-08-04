@@ -1035,6 +1035,9 @@ class Game
     this.moveCountAtLastUpdate = 0;
     this.currentWeather = null;
     this.textElements = [];
+
+    this.timeStarted = Date.now();
+    this.minimumLoadingTime = 15000;
   }
 
   //Runs every game tick (arbitrary value, currently every 1/20 seconds)
@@ -1117,7 +1120,7 @@ class Game
     }
     else if (this.state === "menu")
     {
-      if (this.renderer.assetsLoaded())
+      if (this.renderer.assetsLoaded() && Date.now() > this.timeStarted+this.minimumLoadingTime)
       {
         this.initializeQuadrantData();
         this.initializeOverlayData();
@@ -2099,6 +2102,7 @@ class GameRenderer
       else if (game.state === "menu")
       {
         this.displayMenu(game);
+        this.drawLoadingBar();
       }
 
       this.displaySupporters(game);
@@ -2117,6 +2121,14 @@ class GameRenderer
       window.requestAnimationFrame(function () { this.renderLoop(game); }.bind(game.renderer));
 
       this.renderTick++;
+    }
+
+    drawLoadingBar()
+    {
+      let totalAssets = Object.keys(this.assets.assets).length;
+      let assetsLoaded = totalAssets - this.assets.loadingAssets.length;
+
+
     }
 
     displayWisdom(game)
