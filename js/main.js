@@ -1038,6 +1038,9 @@ class Game
 
     this.timeStarted = Date.now();
     this.minimumLoadingTime = 15000;
+
+    this.timeLastTextElement = Date.now();
+    this.minimumTextElementGapTime = 6500;
   }
 
   //Runs every game tick (arbitrary value, currently every 1/20 seconds)
@@ -1146,10 +1149,10 @@ class Game
 
   addTextElement()
   {
+    this.timeLastTextElement = Date.now();
     let markov = new MarkovGeneratorWord(2, 50);
 
     var lines = markovtext.split('\n');
-
 
     for (var i = 0; i < lines.length; i++) {
     // Trim out any extra white space
@@ -1165,7 +1168,7 @@ class Game
       xOffset += this.renderer.canvasSquareSize;
     }
 
-    newElement.element.yOffset = -250;
+    newElement.element.yOffset = (-newElement.element.height)-100;
     newElement.element.xOffset = -(newElement.element.width/2) + xOffset;
 
     this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
@@ -1207,7 +1210,7 @@ class Game
 
   updateTextElements()
   {
-    if (this.textElements.length < Math.min(visionsHad, 5) && Math.random() < 0.005*(visionsHad+2))
+    if (this.textElements.length < Math.min(visionsHad, 5) && Math.random() < 0.005*(visionsHad+2) && (Date.now() > this.timeLastTextElement+this.minimumTextElementGapTime))
     {
       this.addTextElement();
     }
