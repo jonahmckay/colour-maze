@@ -217,28 +217,29 @@ class VisionEffect
     {
       this.colour = colour;
       this.element = new OverlayElement(game.renderer.assets.getAsset("vision"));
+      this.element.setSize(game.renderer.supporterZones["C0"].width, game.renderer.supporterZones["C0"].height);
       if (timeStarted === undefined)
       {
         timeStarted = 0;
       }
       this.timeStarted = timeStarted;
       this.currentTime = timeStarted;
-      this.length = 180;
+      this.length = 420;
     }
 
     getCurrentFade()
     {
-      //number from 0 to 1.0, presumably
+      //number from 0 to 0.5
 
       //fade in
       if (this.currentTime-this.timeStarted < this.length/2)
       {
-        return (Math.abs((this.timeStarted-this.currentTime))/(this.length/2));
+        return (Math.abs((this.timeStarted-this.currentTime))/(this.length/2))*0.5;
       }
       //fade out
       else
       {
-        return (Math.abs(((this.currentTime-this.timeStarted)-this.length))/(this.length/2));
+        return (Math.abs(((this.currentTime-this.timeStarted)-this.length))/(this.length/2))*0.5;
       }
     }
 
@@ -396,9 +397,8 @@ class TextElement
       textCanvas.height = this.height;
       let t_ctx = textCanvas.getContext('2d');
 
-      //t_ctx.fillStyle =  "#FFF3";
       let gradient = t_ctx.createRadialGradient(textCanvas.width/2, textCanvas.height/2, 0, textCanvas.width/2, textCanvas.height/2, textCanvas.height/2);
-      gradient.addColorStop(0, "#FFFF");
+      gradient.addColorStop(0, "#FFF");
       let chosenColour = game.quadrants[Math.floor(Math.random()*4)].colours[0];
       let newColour = new Colour(chosenColour.h, chosenColour.s, chosenColour.l, 0);
       gradient.addColorStop(1, newColour.string);
