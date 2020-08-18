@@ -1037,7 +1037,7 @@ class Game
     this.textElements = [];
 
     this.timeStarted = Date.now();
-    this.minimumLoadingTime = 15000;
+    this.minimumLoadingTime = 150;
 
     this.timeLastTextElement = Date.now();
     this.minimumTextElementGapTime = 6500;
@@ -1162,13 +1162,33 @@ class Game
     let newElement = new TextElement(markovBlock);
     this.textElements.push(newElement);
 
-    let xOffset = this.renderer.squareWidthOffset;
-    if (Math.random() > 0.5)
+    let xOffset = 0;
+    let yOffset = 0;
+
+
+
+    console.log(this.renderer.canvasWidth + "g")
+    if (this.renderer.canvasWidth > this.renderer.canvasHeight)
     {
-      xOffset += this.renderer.canvasSquareSize;
+      xOffset = this.renderer.squareWidthOffset;
+      yOffset = (-newElement.element.height)-100;
+      if (Math.random() > 0.5)
+      {
+        xOffset += this.renderer.canvasSquareSize;
+      }
+    }
+    else
+    {
+
+      yOffset = this.renderer.squareHeightOffset;
+      xOffset = (-newElement.element.width)-100;
+      if (Math.random() > 0.5)
+      {
+        yOffset += this.renderer.canvasSquareSize;
+      }
     }
 
-    newElement.element.yOffset = (-newElement.element.height)-100;
+    newElement.element.yOffset = -(newElement.element.height/2) + yOffset;
     newElement.element.xOffset = -(newElement.element.width/2) + xOffset;
 
     this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
@@ -1179,15 +1199,30 @@ class Game
     let newElement = new TextElement(FIRST_TEXT, 400, 400, 20);
     this.textElements.push(newElement);
 
-    let xOffset = this.renderer.squareWidthOffset;
-    if (Math.random() > 0.5)
+    let xOffset = 0;
+    let yOffset = 0;
+
+    if (this.renderer.canvasWidth > this.renderer.canvasHeight)
     {
-      xOffset += this.renderer.canvasSquareSize;
+      xOffset = this.renderer.squareWidthOffset;
+      yOffset = (-newElement.element.height)-100;
+      if (Math.random() > 0.5)
+      {
+        xOffset += this.renderer.canvasSquareSize;
+      }
     }
-
-    newElement.element.yOffset = -250;
+    else
+    {
+      yOffset = this.renderer.squareHeightOffset;
+      xOffset = (-newElement.element.width)-100;
+      if (Math.random() > 0.5)
+      {
+        yOffset += this.renderer.canvasSquareSize;
+      }
+    }
+    console.log(yOffset, xOffset)
+    newElement.element.yOffset = -(newElement.element.height/2) + yOffset;
     newElement.element.xOffset = -(newElement.element.width/2) + xOffset;
-
     this.renderer.supporterZones["G0"].addOverlayElement(newElement.element);
   }
 
@@ -1217,14 +1252,21 @@ class Game
 
     for (let i = 0; i < this.textElements.length; i++)
     {
-      this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2);
+      if (this.renderer.canvasHeight > this.renderer.canvasWidth)
+      {
+        this.textElements[i].element.setOffset(this.textElements[i].element.xOffset+2, this.textElements[i].element.yOffset);
+      }
+      else
+      {
+        this.textElements[i].element.setOffset(this.textElements[i].element.xOffset, this.textElements[i].element.yOffset+2);
+      }
     }
 
     let textElementsWorking = [...this.textElements];
     for (let i = 0; i < this.textElements.length; i++)
     {
 
-      if (this.textElements[i].element.yOffset > 100+this.renderer.canvasHeight)
+      if (this.textElements[i].element.yOffset > 100+this.renderer.canvasHeight || this.textElements[i].element.xOffset > 100+this.renderer.canvasWidth)
       {
         console.log("text element removed");
         textElementsWorking.splice(i, 1);
@@ -2104,8 +2146,9 @@ class GameRenderer
       }
       else if (game.state === "menu")
       {
-        this.displayMenu(game);
         this.drawLoadingBar();
+        this.displayMenu(game);
+
       }
 
       this.displaySupporters(game);
@@ -2131,7 +2174,15 @@ class GameRenderer
       let totalAssets = Object.keys(this.assets.assets).length;
       let assetsLoaded = totalAssets - this.assets.loadingAssets.length;
 
+      let barHeight = 50;
+      let barVerticalMargin = 50;
+      let barHorizontalMargin = 50;
 
+      this.ctx.fillStyle = "#000000";
+      this.ctx.fillRect(barHorizontalMargin, this.canvas.height-barHeight-barVerticalMargin, this.canvas.width-(barHorizontalMargin*2), barHeight);
+
+      this.ctx.fillStyle = "#00FF00";
+      this.ctx.fillRect(barHorizontalMargin, this.canvas.height-barHeight-barVerticalMargin, (this.canvas.width-(barHorizontalMargin*2))*(assetsLoaded/totalAssets), barHeight);
     }
 
     displayWisdom(game)
