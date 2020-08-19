@@ -1037,7 +1037,7 @@ class Game
     this.textElements = [];
 
     this.timeStarted = Date.now();
-    this.minimumLoadingTime = 150;
+    this.minimumLoadingTime = 15000;
 
     this.timeLastTextElement = Date.now();
     this.minimumTextElementGapTime = 6500;
@@ -2174,9 +2174,9 @@ class GameRenderer
       let totalAssets = Object.keys(this.assets.assets).length;
       let assetsLoaded = totalAssets - this.assets.loadingAssets.length;
 
-      let barHeight = 50;
+      let barHeight = 10;
       let barVerticalMargin = 50;
-      let barHorizontalMargin = 50;
+      let barHorizontalMargin = 200;
 
       this.ctx.fillStyle = "#000000";
       this.ctx.fillRect(barHorizontalMargin, this.canvas.height-barHeight-barVerticalMargin, this.canvas.width-(barHorizontalMargin*2), barHeight);
